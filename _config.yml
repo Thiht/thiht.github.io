@@ -17,3 +17,5 @@ github_username: thiht
 
 # Build settings
 markdown: kramdown
+
+theme: jekyll-theme-midnight

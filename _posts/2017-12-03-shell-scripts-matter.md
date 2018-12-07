@@ -185,7 +185,9 @@ Use the `-v` or `--verbose` of the commands you invoke as needed to improve the 
 
 The easiest way to debug a shell script, besides logging, is to run it with `bash -x`. Another way is to use `set -x` inside the script. This option will make Bash print every command before its execution, replacing the variables with their real values. Used together with the unofficial strict mode, this method is useful to see what's going on in a script with less risk to break the environment.
 
-It's also worth knowing that a few debuggers for Bash exist, for example [bashdb](http://bashdb.sourceforge.net/bashdb.html). bashdb works in the same way as gdb, and can be used to add breakpoints, switching to step by step execution, showing the value of variables, etc. You can learn how to use bashdb with the video "[Using BashDB to Debug Your Shell Scripts ](https://www.youtube.com/watch?v=jbOQJDSTksA)": {% youtube jbOQJDSTksA %}
+It's also worth knowing that a few debuggers for Bash exist, for example [bashdb](http://bashdb.sourceforge.net/bashdb.html). bashdb works in the same way as gdb, and can be used to add breakpoints, switching to step by step execution, showing the value of variables, etc. You can learn how to use bashdb with the video "[Using BashDB to Debug Your Shell Scripts ](https://www.youtube.com/watch?v=jbOQJDSTksA)":
+
+<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/jbOQJDSTksA" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ## Document your scripts
 

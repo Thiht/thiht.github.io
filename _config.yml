@@ -1,21 +1,8 @@
-# Welcome to Jekyll!
-#
-# This config file is meant for settings that affect your whole blog, values
-# which you are expected to set up once and rarely need to edit after that.
-# For technical reasons, this file is *NOT* reloaded automatically when you use
-# 'jekyll serve'. If you change this file, please restart the server process.
-
-# Site settings
 title: Thiht's blog
 email: thiht44@gmail.com
-description: > # this means to ignore newlines until "baseurl:"
-    I'm a computer science student, and I'll be rambling on about stuff I like
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "http://thiht.github.io" # the base hostname & protocol for your site
-
+description: ""
+baseurl: ""
+url: "https://blog.thibaut-rousseau.com/" # the base hostname & protocol for your site
 github_username: thiht
-
-# Build settings
 markdown: kramdown
-
 theme: jekyll-theme-midnight

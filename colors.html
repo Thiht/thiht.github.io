@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Healthcheck</title>
+    <style>
+      .bg-green {
+        background-color: #27ae60;
+      }
+      .bg-yellow {
+        background-color: #f39c12;
+      }
+      .bg-red {
+        background-color: #c0392b;
+      }
+      .txt-green {
+        color: #27ae60;
+      }
+      .txt-yellow {
+        color: #f39c12;
+      }
+      .txt-red {
+        color: #c0392b;
+      }
+      .buttons {
+        text-align: center;
+      }
+      .buttons div {
+        margin: 1em;
+      }
+      .buttons button {
+        padding: 0.5em 1em;
+        height: 50px;
+        width: 50px;
+        border-radius: 100px;
+        border: 0;
+      }
+      #tendency {
+        text-align: center;
+        font-size: 25em;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body class="bg-green">
+    <div class="buttons">
+      <div>
+        <button onclick="setBackgroundColor('green')" class="txt-green">
+          ⬤
+        </button>
+        <button onclick="setBackgroundColor('yellow')" class="txt-yellow">
+          ⬤
+        </button>
+        <button onclick="setBackgroundColor('red')" class="txt-red">⬤</button>
+      </div>
+      <div>
+        <button onclick="setTendency('&uarr;')">&uarr;</button>
+        <button onclick="setTendency('=')">=</button>
+        <button onclick="setTendency('&darr;')">&darr;</button>
+      </div>
+    </div>
+
+    <div id="tendency">=</div>
+
+    <script>
+      function setBackgroundColor(color) {
+        document.body.className = `bg-${color}`;
+      }
+      function setTendency(tendency) {
+        document.getElementById("tendency").innerText = tendency;
+      }
+    </script>
+  </body>
+</html>

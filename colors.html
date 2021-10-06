@@ -6,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Healthcheck</title>
     <style>
+      body {
+        text-align: center;
+        transition: background-color 200ms linear;
+        user-select: none;
+      }
+
       .bg-green {
         background-color: #27ae60;
       }
@@ -15,51 +21,52 @@
       .bg-red {
         background-color: #c0392b;
       }
-      .txt-green {
-        color: #27ae60;
+      .bg-transparent {
+        background-color: #fff;
+        opacity: 0.8;
       }
-      .txt-yellow {
-        color: #f39c12;
-      }
-      .txt-red {
-        color: #c0392b;
-      }
+
       .buttons {
-        text-align: center;
+        margin: 0.5em;
       }
-      .buttons div {
-        margin: 1em;
-      }
-      .buttons button {
-        padding: 0.5em 1em;
-        height: 50px;
-        width: 50px;
-        border-radius: 100px;
+      button {
+        box-shadow: 3px 3px 2px rgba(71, 71, 71, 0.5);
         border: 0;
+        border-radius: 100px;
+        height: 50px;
+        padding: 0.5em 1em;
+        width: 50px;
       }
+      button:hover {
+        cursor: pointer;
+      }
+
       #tendency {
-        text-align: center;
+        color: #fff;
         font-size: 25em;
         font-weight: bold;
+        text-shadow: 3px 5px 2px #474747;
       }
     </style>
   </head>
   <body class="bg-green">
     <div class="buttons">
-      <div>
-        <button onclick="setBackgroundColor('green')" class="txt-green">
-          ⬤
-        </button>
-        <button onclick="setBackgroundColor('yellow')" class="txt-yellow">
-          ⬤
-        </button>
-        <button onclick="setBackgroundColor('red')" class="txt-red">⬤</button>
-      </div>
-      <div>
-        <button onclick="setTendency('&uarr;')">&uarr;</button>
-        <button onclick="setTendency('=')">=</button>
-        <button onclick="setTendency('&darr;')">&darr;</button>
-      </div>
+      <button onclick="setBackgroundColor('green')" class="bg-green">
+        &nbsp;
+      </button>
+      <button onclick="setBackgroundColor('yellow')" class="bg-yellow">
+        &nbsp;
+      </button>
+      <button onclick="setBackgroundColor('red')" class="bg-red">&nbsp;</button>
+    </div>
+    <div class="buttons">
+      <button onclick="setTendency('&uarr;')" class="bg-transparent">
+        &uarr;
+      </button>
+      <button onclick="setTendency('=')" class="bg-transparent">=</button>
+      <button onclick="setTendency('&darr;')" class="bg-transparent">
+        &darr;
+      </button>
     </div>
 
     <div id="tendency">=</div>

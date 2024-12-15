@@ -1,8 +1,0 @@
-title: Thiht's blog
-email: thiht44@gmail.com
-description: ""
-baseurl: ""
-url: "https://blog.thibaut-rousseau.com/" # the base hostname & protocol for your site
-github_username: thiht
-markdown: kramdown
-theme: jekyll-theme-midnight

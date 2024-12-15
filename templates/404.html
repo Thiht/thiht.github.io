@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="text-center">Not Found, you will be redirected to the homepage.</h1>
+
+<script>
+  setTimeout(() => {
+    window.location.href = "/";
+  }, 3000);
+</script>
+
+{% endblock content %}

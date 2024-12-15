@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="text-center my-5">
+  <p>
+    Hi! I'm Thibaut, a Go software developer from France.
+    <br />
+    I write about programming, software architecture, and other topics of
+    interest.
+  </p>
+</section>
+
+{% set blog_section = get_section(path="blog/_index.md") %}
+
+<p class="text-center my-10">༺༻</p>
+
+<ul class="max-w-2xl mx-auto">
+  {% for page in blog_section.pages %}
+  <li class="my-5 p-5">
+    <a href="{{ page.permalink }}" class="block text-center hover:drop-shadow-lg">
+      <h2 class="font-cursive text-lg">{{ page.title }}</h2>
+      <p class="">{{ page.description }}</p>
+    </a>
+    <small class="block text-right text-gray-700 ">{{ page.date }}</small>
+  </li>
+  {% endfor %}
+</ul>
+
+{% endblock content %}

@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: Charm;
+  src: url(/fonts/Charm-Regular.ttf);
+}
+
+@font-face {
+  font-family: Charm;
+  font-weight: 500 1000;
+  src: url(/fonts/Charm-Bold.ttf);
+}

@@ -11,6 +11,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build Tailwind styles
+        run: npm install && npm run build:tailwind
+
       - name: Build and deploy
         uses: shalzz/zola-deploy-action@master
         env:

@@ -1,8 +1,11 @@
 +++
 title = "Shell Scripts Matter"
 description = "Learn how to follow good development practices, even with Bash!"
-date =  2017-12-03
+date = 2017-12-03
 aliases = ["2017/12/03/shell-scripts-matter.html"]
+
+[taxonomies]
+tags = ["shell"]
 +++
 
 <img class="mx-auto" src="./bash-logo.png" alt="Bash logo">

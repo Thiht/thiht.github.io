@@ -1,8 +1,11 @@
 +++
 title = "Learn to use screen, a terminal multiplexer"
 description = "screen is a terminal multiplexer. In this article, you'll learn what a terminal multiplexer is, and why it's so great."
-date =  2015-12-04
+date = 2015-12-04
 aliases = ["2015/12/04/screen-terminal-multiplexer.html"]
+
+[taxonomies]
+tags = ["shell"]
 +++
 
 [screen](https://www.gnu.org/software/screen/), or GNU screen, is a terminal multiplexer. It allows to manage multiple terminal sessions within the same console. In a way, it does the same thing as modern terminal emulators such as [Terminator](https://gnometerminator.blogspot.com/) or [Terminology](https://www.enlightenment.org/about-terminology) with their built-in tab system and layout management. The main benefit is that screen also works through an SSH connection: you will be able to use your screen knowledge and configuration on any machine supporting screen in the world!

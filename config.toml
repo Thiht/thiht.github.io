@@ -2,6 +2,10 @@ base_url = "https://blog.thibaut-rousseau.com"
 build_search_index = true
 generate_feeds = true
 author = "Thibaut Rousseau"
+taxonomies = [
+  { name = "tags", render = false }
+]
 
 [markdown]
 highlight_code = true
+

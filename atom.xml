@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+    <title></title>
+    <link rel="self" type="application/atom+xml" href="https://blog.thibaut-rousseau.com/atom.xml"/>
+    <link rel="alternate" type="text/html" href="https://blog.thibaut-rousseau.com"/>
+    <generator uri="https://www.getzola.org/">Zola</generator>
+    <updated>2023-12-18T00:00:00+00:00</updated>
+    <id>https://blog.thibaut-rousseau.com/atom.xml</id>
+    <entry xml:lang="en">
+        <title>TDD is a personal practice</title>
+        <published>2023-12-18T00:00:00+00:00</published>
+        <updated>2023-12-18T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Thibaut Rousseau
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://blog.thibaut-rousseau.com/blog/tdd-is-a-personal-practice/"/>
+        <id>https://blog.thibaut-rousseau.com/blog/tdd-is-a-personal-practice/</id>
+        
+        <content type="html" xml:base="https://blog.thibaut-rousseau.com/blog/tdd-is-a-personal-practice/">&lt;p&gt;I know TDD. I know what real TDD is. I know how to do it right, whatever that means depending on the TDD practitioner.
+I still don’t like this practice, and rarely use it, except in 2 situations:&lt;&#x2F;p&gt;
+&lt;ol&gt;
+&lt;li&gt;I’m fixing a bug in an existing code base: in this case I’ll write a test first to reproduce and isolate the bug, and then fix it and refactor if needed&lt;&#x2F;li&gt;
+&lt;li&gt;I’m adding a new use case to an existing feature, and will treat the lack of existence of this new case as a bug, see 1.&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;p&gt;I don’t ever, ever, EVER use TDD to write new features from scratch. It doesn’t work for me. It doesn’t match my mental model. It doesn’t help me go faster, doesn’t make me produce better code, and doesn’t make me write more, or more useful tests. I don&#x27;t enjoy it and it doesn&#x27;t provide me with any kind of satisfaction.&lt;&#x2F;p&gt;
+&lt;p&gt;I still have a personal methodology, but it’s not TDD. I still strive to write good test and maintain good coverage, but not doing TDD.&lt;&#x2F;p&gt;
+&lt;p&gt;TDD should not be forced upon developers who don’t want to follow it, in the same way a specific IDE should not be forced upon a developer. TDD is a tool, not a goal in itself. The shared goal is to have a well tested code base that is as safe as possible from regressions. How developers achieve that doesn’t matter.&lt;&#x2F;p&gt;
+&lt;p&gt;TDD should not be conflated as &quot;writing tests&quot;. I often see the rhetoric that, if you don’t do TDD, then you don’t write tests. If I showed you a code base with tests, there would be no way for you to know if they’ve been written in TDD or not.&lt;&#x2F;p&gt;
+&lt;p&gt;TDD is not a team practice. Writing tests is a team practice. Code review is a team practice. Automated CI is a team practice. Whether a developer does or does not do TDD has no impact on the rest of the team. I could tell you I&#x27;m doing TDD if it pleases you, and you&#x27;d have no way to know that I don&#x27;t, micro-managing set aside.&lt;&#x2F;p&gt;
+&lt;p&gt;If in TDD you trust, don’t proselytize it. TDD is a personal practice.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>Shell Scripts Matter</title>
+        <published>2017-12-03T00:00:00+00:00</published>
+        <updated>2017-12-03T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Thibaut Rousseau
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://blog.thibaut-rousseau.com/blog/shell-scripts-matter/"/>
+        <id>https://blog.thibaut-rousseau.com/blog/shell-scripts-matter/</id>
+        
+        <content type="html" xml:base="https://blog.thibaut-rousseau.com/blog/shell-scripts-matter/">&lt;img class=&quot;mx-auto&quot; src=&quot;.&#x2F;bash-logo.png&quot; alt=&quot;Bash logo&quot;&gt;
+&lt;p&gt;The shell is an odd beast. Although it goes against every current trend in software engineering (strong typing, compile checks over runtime checks, ...), shell scripts are here to stay, and still constitute an important part of every developer&#x27;s life.&lt;&#x2F;p&gt;
+&lt;p&gt;The weird thing about shell scripts is that even strong advocates of good practices gladly forget all they know when it comes to shell scripting.&lt;&#x2F;p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Versioning? Why bother, it&#x27;s disposable code.&lt;&#x2F;p&gt;
+&lt;p&gt;Code quality? That&#x27;s just a shell script, it&#x27;s garbage anyway.&lt;&#x2F;p&gt;
+&lt;p&gt;Testing? Nah. There aren&#x27;t any decent tools for that.&lt;&#x2F;p&gt;
+&lt;&#x2F;blockquote&gt;
+&lt;p&gt;Wrong, wrong, and wrong. Shell scripts have value. &lt;strong&gt;Everything you do for real code should be done for non trivial shell scripts&lt;&#x2F;strong&gt;, even for a one-time script. That includes versioning, code reviews, continuous integration, static code analysis, and testing.&lt;&#x2F;p&gt;
+&lt;p&gt;Here is a summary of everything that can, and should be done when writing shell scripts.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;strong&gt;Note:&lt;&#x2F;strong&gt; This article will use Bash as a reference shell. Most of the content can be transposed to other POSIX compliant shells.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;keep-your-scripts-in-version-control&quot;&gt;Keep your scripts in version control&lt;&#x2F;h2&gt;
+&lt;p&gt;Keeping shell scripts under version control has multiple advantages:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;It constitutes a library. Shell scripts can be hard to write. If there&#x27;s a reference for something difficult somewhere, your coworkers will thank you when they need it. &lt;strong&gt;You should setup a &quot;shell-scripts&quot; repository&lt;&#x2F;strong&gt; somewhere as soon as possible.&lt;&#x2F;li&gt;
+&lt;li&gt;They can be properly reviewed. Making mistakes is easy with shell scripts, and they can be very damaging. &lt;strong&gt;Code review should be mandatory for shell scripts&lt;&#x2F;strong&gt;, as for any other piece of code.&lt;&#x2F;li&gt;
+&lt;li&gt;They can be improved. I won&#x27;t explain to you what version control is. But with shell scripts versioned, it&#x27;s easy to improve them regularly.&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Please, from now on, &lt;strong&gt;version all your shell scripts&lt;&#x2F;strong&gt; before running them. &lt;strong&gt;Have someone reviewing your scripts in priority&lt;&#x2F;strong&gt; before executing them in production. It&#x27;s not a waste of your coworkers&#x27; time, it&#x27;s a time saver for the team.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;improve-the-quality-of-your-scripts-with-shellcheck&quot;&gt;Improve the quality of your scripts with ShellCheck&lt;&#x2F;h2&gt;
+&lt;p&gt;Although you can check the syntactic validity of your scripts with the command &lt;code&gt;bash -n&lt;&#x2F;code&gt;, much powerful tools exist.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;a href=&quot;https:&#x2F;&#x2F;www.shellcheck.net&#x2F;&quot;&gt;ShellCheck&lt;&#x2F;a&gt; is a static code analysis tool for shell scripts. It&#x27;s really an awesome tool which will help you improve your skills as you use it. &lt;strong&gt;So do use it&lt;&#x2F;strong&gt;. You can &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;koalaman&#x2F;shellcheck#installing&quot;&gt;install it globally on your machine&lt;&#x2F;a&gt;, use it in your &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;koalaman&#x2F;shellcheck#travis-ci-setup&quot;&gt;continuous integration&lt;&#x2F;a&gt;, and it even &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;koalaman&#x2F;shellcheck#in-your-editor&quot;&gt;integrates perfectly with most major editors&lt;&#x2F;a&gt;. There really are no downsides to using ShellCheck and it can save you from yourself.&lt;&#x2F;p&gt;
+&lt;p&gt;If Steam had used ShellCheck in 2015, &lt;a href=&quot;https:&#x2F;&#x2F;linux.slashdot.org&#x2F;story&#x2F;15&#x2F;01&#x2F;16&#x2F;1429201&#x2F;steam-for-linux-bug-wipes-out-all-of-a-users-files&quot;&gt;this line would never have made it to production&lt;&#x2F;a&gt;:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;rm -rf &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;STEAMROOT&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;&#x2F;&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;*
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;This code violates the &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;koalaman&#x2F;shellcheck&#x2F;wiki&#x2F;SC2115&quot;&gt;SC2115 rule&lt;&#x2F;a&gt; from ShellCheck.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;use-bash-unofficial-strict-mode&quot;&gt;Use Bash unofficial strict mode&lt;&#x2F;h2&gt;
+&lt;p&gt;The unofficial strict mode comes from Aaron Maxwell&#x27;s article &quot;&lt;a href=&quot;http:&#x2F;&#x2F;redsymbol.net&#x2F;articles&#x2F;unofficial-bash-strict-mode&#x2F;&quot;&gt;Use the Unofficial Bash Strict Mode (Unless You Looove Debugging)&lt;&#x2F;a&gt;&quot;. He suggests to start every Bash script with the following lines:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#!&#x2F;bin&#x2F;bash
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;set&lt;&#x2F;span&gt;&lt;span&gt; -euo pipefail
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;IFS&lt;&#x2F;span&gt;&lt;span&gt;=$&amp;#39;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;\n\t&lt;&#x2F;span&gt;&lt;span&gt;&amp;#39;
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;set -e&lt;&#x2F;code&gt; will exit the script if any command returns a non-zero status code. To prevent the option from triggering on commands returning a non-zero status code even when no error occurred, there are two solutions:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;using the &lt;code&gt;|| true&lt;&#x2F;code&gt; pattern:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;command_returning_non_zero &lt;&#x2F;span&gt;&lt;span&gt;|| &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;true
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;
+&lt;p&gt;temporary disabling the option:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;set &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;+e
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;command_returning_non_zero
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;set &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;-e
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;set -u&lt;&#x2F;code&gt; will prevent using an undefined variable. In the case of undefined positional parameters (&lt;code&gt;$1&lt;&#x2F;code&gt;, &lt;code&gt;$2&lt;&#x2F;code&gt;, ...), you can give them a default value with the &lt;a href=&quot;https:&#x2F;&#x2F;www.gnu.org&#x2F;software&#x2F;bash&#x2F;manual&#x2F;html_node&#x2F;Shell-Parameter-Expansion.html&quot;&gt;parameter expansion&lt;&#x2F;a&gt; construct:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;my_arg&lt;&#x2F;span&gt;&lt;span&gt;=$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;{&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;1&lt;&#x2F;span&gt;&lt;span&gt;:-&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;default&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;set -o pipefail&lt;&#x2F;code&gt; will force pipelines to fail on the first non-zero status code.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;IFS=$&#x27;\n\t&#x27;&lt;&#x2F;code&gt; makes iterations and splitting less surprising, in the case of loops mostly. The default for this variable is usually &lt;code&gt;IFS=$&#x27; \n\t&#x27;&lt;&#x2F;code&gt; but the space as a separator often gives confusing results.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Read the &lt;a href=&quot;http:&#x2F;&#x2F;redsymbol.net&#x2F;articles&#x2F;unofficial-bash-strict-mode&#x2F;&quot;&gt;original article&lt;&#x2F;a&gt; for more details and &lt;a href=&quot;http:&#x2F;&#x2F;redsymbol.net&#x2F;articles&#x2F;unofficial-bash-strict-mode&#x2F;#issues-and-solutions&quot;&gt;solutions for common challenges when using the strict mode&lt;&#x2F;a&gt;!&lt;&#x2F;p&gt;
+&lt;p&gt;The unofficial strict mode is more intrusive than what we&#x27;ve seen before and can be hard to deal with, but it&#x27;s worth it in the long run. Take the time to try it.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;do-some-cleanup&quot;&gt;Do some cleanup!&lt;&#x2F;h2&gt;
+&lt;p&gt;When scripts are interrupted, either because of a user&#x27;s action or because something bad occurred, most shell scripts don&#x27;t clean up their mess. In the worst case, they might not restart services they had to temporarily disable. It&#x27;s a shame given how easy it is to perform some cleanup and error catching with the &lt;code&gt;trap&lt;&#x2F;code&gt; command.&lt;&#x2F;p&gt;
+&lt;p&gt;Once again, in &quot;&lt;a href=&quot;http:&#x2F;&#x2F;redsymbol.net&#x2F;articles&#x2F;bash-exit-traps&#x2F;&quot;&gt;How &quot;Exit Traps&quot; Can Make Your Bash Scripts Way More Robust And Reliable&lt;&#x2F;a&gt;&quot;, Aaron Maxwell gives some great advice.&lt;&#x2F;p&gt;
+&lt;p&gt;Always add the following in your shell scripts:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;cleanup&lt;&#x2F;span&gt;&lt;span&gt;() {
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;# ...
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;trap&lt;&#x2F;span&gt;&lt;span&gt; cleanup EXIT
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The &lt;code&gt;trap&lt;&#x2F;code&gt; command will execute the &lt;code&gt;cleanup&lt;&#x2F;code&gt; function as soon as the script exits. In this function you could remove temporary files, restart services, or whatever is relevant to your script.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;test-your-scripts-with-shunit2&quot;&gt;Test your scripts with shUnit2&lt;&#x2F;h2&gt;
+&lt;p&gt;&lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;kward&#x2F;shunit2&quot;&gt;shUnit2&lt;&#x2F;a&gt; is a unit testing framework for shell scripts. It&#x27;s inspired by JUnit. It&#x27;s available in the standard repositories so you can install it with &lt;code&gt;apt-get install shunit2&lt;&#x2F;code&gt; on an Ubuntu-based distro.&lt;&#x2F;p&gt;
+&lt;p&gt;shUnit2 consists of a shell script you can &lt;code&gt;source&lt;&#x2F;code&gt; in your test file. To use it, there are multiple approaches. In order not to clutter the main script, I prefer writing the tests in a separate file. This means I&#x27;ll have a &lt;code&gt;script.sh&lt;&#x2F;code&gt; file and a &lt;code&gt;test_script.sh&lt;&#x2F;code&gt; file.&lt;&#x2F;p&gt;
+&lt;p&gt;Below is an example for a script offering a function to add two numbers.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;code&gt;add.sh&lt;&#x2F;code&gt; must have the following structure:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;add&lt;&#x2F;span&gt;&lt;span&gt;() {
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;local &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;a&lt;&#x2F;span&gt;&lt;span&gt;=$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;1
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;local &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;b&lt;&#x2F;span&gt;&lt;span&gt;=$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;2
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;$(( a + b ))
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;if &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;[[ &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;{&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;BASH_SOURCE[&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;]&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; = &amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;]]&lt;&#x2F;span&gt;&lt;span&gt;; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;then
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;# Main code of the script
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;add &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;1 &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;2
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;fi
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The &lt;code&gt;[[ &quot;${BASH_SOURCE[0]}&quot; = &quot;$0&quot; ]]&lt;&#x2F;code&gt; test is used to execute the main code only when the script is executed directly, not &lt;code&gt;source&lt;&#x2F;code&gt;d.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;code&gt;test_add.sh&lt;&#x2F;code&gt; will look like this:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span&gt; .&#x2F;add.sh
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;test_add&lt;&#x2F;span&gt;&lt;span&gt;() {
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;actual&lt;&#x2F;span&gt;&lt;span&gt;=$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;add&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt; 5 8)
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;expected&lt;&#x2F;span&gt;&lt;span&gt;=&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;13
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;assertEquals &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;expected&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;actual&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span&gt; shunit2
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;First, the test file &lt;code&gt;source&lt;&#x2F;code&gt;s the main file &lt;code&gt;add.sh&lt;&#x2F;code&gt; (in Bash, &lt;code&gt;.&lt;&#x2F;code&gt; is an alias to &lt;code&gt;source&lt;&#x2F;code&gt;). The functions it declares are then available in the test script.&lt;&#x2F;p&gt;
+&lt;p&gt;The actual tests are simple functions with a name starting by &lt;code&gt;test&lt;&#x2F;code&gt;. At the end, the globally installed &lt;code&gt;shunit2&lt;&#x2F;code&gt; is &lt;code&gt;source&lt;&#x2F;code&gt;d and performs its &lt;a href=&quot;http:&#x2F;&#x2F;ssb.stsci.edu&#x2F;testing&#x2F;shunit2&#x2F;shunit2.html#quickstart&quot;&gt;magic&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;The test file can then be executed:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;$ bash test_add.sh
+&lt;&#x2F;span&gt;&lt;span&gt;test_add
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;Ran 1 test.
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;OK
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The details of what shUnit2 can do are explained in &lt;a href=&quot;http:&#x2F;&#x2F;ssb.stsci.edu&#x2F;testing&#x2F;shunit2&#x2F;shunit2.html#function-reference&quot;&gt;its documentation&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;There are alternatives to shUnit2, such as &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;sstephenson&#x2F;bats&quot;&gt;Bats&lt;&#x2F;a&gt; or &lt;a href=&quot;https:&#x2F;&#x2F;bmizerany.github.io&#x2F;roundup&#x2F;&quot;&gt;Roundup&lt;&#x2F;a&gt; but I didn&#x27;t have a chance to use them yet. Their usage should be relatively similar though. The point of this section is that &lt;strong&gt;testing shell scripts is doable and should be done&lt;&#x2F;strong&gt;, whatever solution you choose in the end.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;log-what-your-script-is-doing&quot;&gt;Log what your script is doing&lt;&#x2F;h2&gt;
+&lt;p&gt;In the past, I made the mistake of not logging anything. I liked running a script and seeing it work magically without anything ugly showing in the console. I was wrong, because when something doesn&#x27;t work as expected, it becomes impossible to know what happened. Running a script is not supposed to feel like magic, it must be somewhat verbose and understandable. For that, please &lt;strong&gt;log as much as possible in your scripts&lt;&#x2F;strong&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;For this purpose, I usually add the following lines in my scripts:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;readonly &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;&#x2F;tmp&#x2F;&lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;basename &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;).log&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;info&lt;&#x2F;span&gt;&lt;span&gt;()    { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[INFO]    &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;warning&lt;&#x2F;span&gt;&lt;span&gt;() { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[WARNING] &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;error&lt;&#x2F;span&gt;&lt;span&gt;()   { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[ERROR]   &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;fatal&lt;&#x2F;span&gt;&lt;span&gt;()   { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[FATAL]   &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;exit&lt;&#x2F;span&gt;&lt;span&gt; 1 ; }
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;This tiny logging framework allows to easily keep track of whatever happens during the script execution. Logging becomes as simple as writing &lt;code&gt;info &quot;Executing this and that...&quot;&lt;&#x2F;code&gt;. Then it&#x27;s easy to &lt;code&gt;grep&lt;&#x2F;code&gt; on the log file to find something specific. Feel free to improve these functions as you need, with the date, the calling function name (with &lt;code&gt;$FUNCNAME&lt;&#x2F;code&gt;), etc.&lt;&#x2F;p&gt;
+&lt;p&gt;I don&#x27;t use the builtin &lt;a href=&quot;http:&#x2F;&#x2F;man7.org&#x2F;linux&#x2F;man-pages&#x2F;man1&#x2F;logger.1.html&quot;&gt;&lt;code&gt;logger&lt;&#x2F;code&gt;&lt;&#x2F;a&gt; because it requires special privileges to write to &lt;code&gt;&#x2F;var&#x2F;log&lt;&#x2F;code&gt; and I&#x27;m not fond of its usage. Writing to a log file in &lt;code&gt;&#x2F;tmp&lt;&#x2F;code&gt; is usually good enough. For &lt;code&gt;cron&lt;&#x2F;code&gt; scripts though you should probably investigate &lt;code&gt;logger&lt;&#x2F;code&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;Use the &lt;code&gt;-v&lt;&#x2F;code&gt; or &lt;code&gt;--verbose&lt;&#x2F;code&gt; of the commands you invoke as needed to improve the quality of your logging.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;learn-to-debug-your-scripts&quot;&gt;Learn to debug your scripts&lt;&#x2F;h2&gt;
+&lt;p&gt;The easiest way to debug a shell script, besides logging, is to run it with &lt;code&gt;bash -x&lt;&#x2F;code&gt;. Another way is to use &lt;code&gt;set -x&lt;&#x2F;code&gt; inside the script. This option will make Bash print every command before its execution, replacing the variables with their real values. Used together with the unofficial strict mode, this method is useful to see what&#x27;s going on in a script with less risk to break the environment.&lt;&#x2F;p&gt;
+&lt;p&gt;It&#x27;s also worth knowing that a few debuggers for Bash exist, for example &lt;a href=&quot;http:&#x2F;&#x2F;bashdb.sourceforge.net&#x2F;bashdb.html&quot;&gt;bashdb&lt;&#x2F;a&gt;. bashdb works in the same way as gdb, and can be used to add breakpoints, switching to step by step execution, showing the value of variables, etc. You can learn how to use bashdb with the video &quot;&lt;a href=&quot;https:&#x2F;&#x2F;www.youtube.com&#x2F;watch?v=jbOQJDSTksA&quot;&gt;Using BashDB to Debug Your Shell Scripts &lt;&#x2F;a&gt;&quot;:&lt;&#x2F;p&gt;
+&lt;div&gt;
+  &lt;iframe
+    class=&quot;block m-auto w-full max-w-xl aspect-video border-none&quot;
+    src=&quot;https:&#x2F;&#x2F;www.youtube.com&#x2F;embed&#x2F;jbOQJDSTksA&quot;
+    allow=&quot;accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture&quot;
+    allowfullscreen&gt;
+  &lt;&#x2F;iframe&gt;
+&lt;&#x2F;div&gt;
+&lt;h2 id=&quot;document-your-scripts&quot;&gt;Document your scripts&lt;&#x2F;h2&gt;
+&lt;p&gt;Any shell script should have a &lt;code&gt;--help&lt;&#x2F;code&gt; option. This doesn&#x27;t seem easy? It is, thanks to the following wizardry:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#&#x2F; Usage: add &amp;lt;first number&amp;gt; &amp;lt;second number&amp;gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#&#x2F; Compute the sum of two numbers
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;usage&lt;&#x2F;span&gt;&lt;span&gt;() {
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;grep &lt;&#x2F;span&gt;&lt;span&gt;&amp;#39;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;^#&#x2F;&lt;&#x2F;span&gt;&lt;span&gt;&amp;#39; &amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;cut -c4-
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;exit&lt;&#x2F;span&gt;&lt;span&gt; 0
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;expr &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; : &amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;.*--help&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt; &#x2F;dev&#x2F;null &amp;amp;&amp;amp; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;usage
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The &lt;code&gt;usage&lt;&#x2F;code&gt; function will print every line starting with &lt;code&gt;#&#x2F;&lt;&#x2F;code&gt; comments, without this prefix.&lt;&#x2F;p&gt;
+&lt;p&gt;The &lt;code&gt;expr&lt;&#x2F;code&gt; command will check if the string resulting of the concatenation of all the parameters contains &lt;code&gt;--help&lt;&#x2F;code&gt;. If so, it will call &lt;code&gt;usage&lt;&#x2F;code&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;This is definitely not the cleanest way to parse parameters, but this quick method ensures you will add a &lt;code&gt;--help&lt;&#x2F;code&gt; flag.&lt;&#x2F;p&gt;
+&lt;p&gt;For the sake of good practices, &lt;a href=&quot;https:&#x2F;&#x2F;stackoverflow.com&#x2F;a&#x2F;14203146&#x2F;1544176&quot;&gt;this StackOverflow post&lt;&#x2F;a&gt; explains how to properly parse a script&#x27;s parameters using the &lt;code&gt;while&lt;&#x2F;code&gt;&#x2F;&lt;code&gt;case&lt;&#x2F;code&gt;&#x2F;&lt;code&gt;shift&lt;&#x2F;code&gt; construct.&lt;&#x2F;p&gt;
+&lt;p&gt;To generate HTML documentation from your comments, you can also check &lt;a href=&quot;http:&#x2F;&#x2F;rtomayko.github.io&#x2F;shocco&#x2F;&quot;&gt;shocco.sh&lt;&#x2F;a&gt;, which inspired &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;rtomayko&#x2F;shocco&#x2F;blob&#x2F;e4660e563559d5bd9acbca42b61115e72b54667f&#x2F;shocco.sh#L54-L57&quot;&gt;the above trick&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;random-advice&quot;&gt;Random advice&lt;&#x2F;h2&gt;
+&lt;p&gt;The following is a list of random good practices I&#x27;ve learned the hard way. I&#x27;ll explain the rationale behind every advice as I go.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;use-bash-for-scripting&quot;&gt;Use Bash for scripting&lt;&#x2F;h3&gt;
+&lt;p&gt;Use Bash by default, Sh if you have to. Try to forget about Ksh, Zsh or Fish unless there are really good reasons to use them. This choice not only ensures your script will work virtually everywhere, but also fosters comprehension of a script by the whole team. You don&#x27;t write production scripts for yourself.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;use-bashisms&quot;&gt;Use Bashisms&lt;&#x2F;h3&gt;
+&lt;p&gt;If you use Bash, don&#x27;t half-use it. Use &lt;a href=&quot;https:&#x2F;&#x2F;www.gnu.org&#x2F;software&#x2F;bash&#x2F;manual&#x2F;html_node&#x2F;Shell-Parameter-Expansion.html&quot;&gt;parameter expansion&lt;&#x2F;a&gt;. Use &lt;a href=&quot;http:&#x2F;&#x2F;tldp.org&#x2F;LDP&#x2F;abs&#x2F;html&#x2F;localvar.html&quot;&gt;local&lt;&#x2F;a&gt; and &lt;a href=&quot;https:&#x2F;&#x2F;ss64.com&#x2F;bash&#x2F;readonly.html&quot;&gt;readonly&lt;&#x2F;a&gt; variables. Use &lt;a href=&quot;https:&#x2F;&#x2F;www.gnu.org&#x2F;software&#x2F;bash&#x2F;manual&#x2F;html_node&#x2F;Bash-Conditional-Expressions.html&quot;&gt;improved conditional expressions&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;quote-your-variables&quot;&gt;Quote your variables&lt;&#x2F;h3&gt;
+&lt;p&gt;Even if you know quoting is not required, it&#x27;s a good habit to always quote variables. The only exception is when you specifically want expansion to occur. More on &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;koalaman&#x2F;shellcheck&#x2F;wiki&#x2F;SC2086&quot;&gt;word splitting&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;name-your-parameters&quot;&gt;Name your parameters&lt;&#x2F;h3&gt;
+&lt;p&gt;This goes without saying, but explicitly naming parameters (&lt;code&gt;$1&lt;&#x2F;code&gt;, &lt;code&gt;$2&lt;&#x2F;code&gt;, ...) makes the code self-documenting and helps readability. The parameter expansion of Bash is a great candidate for naming and assigning default values to positional parameters:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;my_arg&lt;&#x2F;span&gt;&lt;span&gt;=$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;{&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;1&lt;&#x2F;span&gt;&lt;span&gt;:-&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;default}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;h3 id=&quot;use-subshells-as-a-way-to-control-what-s-in-your-global-scope&quot;&gt;Use subshells as a way to control what&#x27;s in your global scope&lt;&#x2F;h3&gt;
+&lt;p&gt;An example is worth a thousand words:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;var&lt;&#x2F;span&gt;&lt;span&gt;=&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;1
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;var
+&lt;&#x2F;span&gt;&lt;span&gt;(
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;var
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;var&lt;&#x2F;span&gt;&lt;span&gt;=&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;5
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;var
+&lt;&#x2F;span&gt;&lt;span&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;var
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;will print:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;1
+&lt;&#x2F;span&gt;&lt;span&gt;1
+&lt;&#x2F;span&gt;&lt;span&gt;5
+&lt;&#x2F;span&gt;&lt;span&gt;1
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;My main usage for this is when I need to temporarily modify &lt;code&gt;$IFS&lt;&#x2F;code&gt; (for iterating over simple CSV-like files for example) and reset it to its original value afterwards.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;use-a-template&quot;&gt;Use a template&lt;&#x2F;h3&gt;
+&lt;p&gt;This script template summarizes every snippets shared along this article. I believe it&#x27;s a good basis for any kind of script.&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#!&#x2F;usr&#x2F;bin&#x2F;env bash
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;set&lt;&#x2F;span&gt;&lt;span&gt; -euo pipefail
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;IFS&lt;&#x2F;span&gt;&lt;span&gt;=$&amp;#39;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;\n\t&lt;&#x2F;span&gt;&lt;span&gt;&amp;#39;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#&#x2F; Usage:
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#&#x2F; Description:
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#&#x2F; Examples:
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#&#x2F; Options:
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;#&#x2F;   --help: Display this help message
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;usage&lt;&#x2F;span&gt;&lt;span&gt;() { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;grep &lt;&#x2F;span&gt;&lt;span&gt;&amp;#39;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;^#&#x2F;&lt;&#x2F;span&gt;&lt;span&gt;&amp;#39; &amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;cut -c4- &lt;&#x2F;span&gt;&lt;span&gt;; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;exit&lt;&#x2F;span&gt;&lt;span&gt; 0 ; }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;expr &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; : &amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;.*--help&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt; &#x2F;dev&#x2F;null &amp;amp;&amp;amp; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;usage
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;readonly &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;&#x2F;tmp&#x2F;&lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;basename &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;).log&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;info&lt;&#x2F;span&gt;&lt;span&gt;()    { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[INFO]    &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;warning&lt;&#x2F;span&gt;&lt;span&gt;() { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[WARNING] &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;error&lt;&#x2F;span&gt;&lt;span&gt;()   { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[ERROR]   &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;fatal&lt;&#x2F;span&gt;&lt;span&gt;()   { &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;echo &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;[FATAL]   &lt;&#x2F;span&gt;&lt;span&gt;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; | &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;tee -a &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;LOG_FILE&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &amp;gt;&amp;amp;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2 &lt;&#x2F;span&gt;&lt;span&gt;; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;exit&lt;&#x2F;span&gt;&lt;span&gt; 1 ; }
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;cleanup&lt;&#x2F;span&gt;&lt;span&gt;() {
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;# Remove temporary files
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;# Restart services
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;# ...
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;if &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;[[ &lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;{&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;BASH_SOURCE[&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;]&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; = &amp;quot;$&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;]]&lt;&#x2F;span&gt;&lt;span&gt;; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;then
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;trap&lt;&#x2F;span&gt;&lt;span&gt; cleanup EXIT
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;# Script goes here
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;# ...
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;fi
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;h3 id=&quot;stay-informed&quot;&gt;Stay informed&lt;&#x2F;h3&gt;
+&lt;p&gt;Shell scripting isn&#x27;t moving that much these days. It&#x27;s a great reason to read stuff about the topic, it makes it easy to keep up! Here are some interesting resources:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;man bash&lt;&#x2F;code&gt;, I bet almost none of you have read it, yet it&#x27;s a great source of information! And it&#x27;s not that hard to read, I promise.&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;twitter.com&#x2F;UnixToolTip&quot;&gt;@UnixTooltip&lt;&#x2F;a&gt; on Twitter, continuously gives tips and tricks.&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;stackoverflow.com&#x2F;questions&#x2F;tagged&#x2F;bash?sort=votes&amp;amp;pageSize=15&quot;&gt;Most upvoted Bash questions on StackOverflow&lt;&#x2F;a&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;stackoverflow.com&#x2F;documentation&#x2F;bash&#x2F;topics&quot;&gt;Bash participative documentation on StackOverflow&lt;&#x2F;a&gt; has some interesting examples.&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;koalaman&#x2F;shellcheck&#x2F;wiki&quot;&gt;ShellCheck&#x27;s wiki&lt;&#x2F;a&gt; is a good resource to learn what not to do, and why.&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;news.ycombinator.com&#x2F;news&quot;&gt;Hacker News&lt;&#x2F;a&gt; and &lt;a href=&quot;https:&#x2F;&#x2F;www.reddit.com&#x2F;r&#x2F;programming&#x2F;&quot;&gt;&#x2F;r&#x2F;programming&lt;&#x2F;a&gt;, once in a while articles on this subject pop out.&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;hr &#x2F;&gt;
+&lt;p&gt;I hope this article brought light on what was possible with shell scripting. The tools are there. You know the practices. Now it&#x27;s up to you to make scripting a delight to work with, for you and your team!&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>Learn to use screen, a terminal multiplexer</title>
+        <published>2015-12-04T00:00:00+00:00</published>
+        <updated>2015-12-04T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Thibaut Rousseau
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://blog.thibaut-rousseau.com/blog/screen-terminal-multiplexer/"/>
+        <id>https://blog.thibaut-rousseau.com/blog/screen-terminal-multiplexer/</id>
+        
+        <content type="html" xml:base="https://blog.thibaut-rousseau.com/blog/screen-terminal-multiplexer/">&lt;p&gt;&lt;a href=&quot;https:&#x2F;&#x2F;www.gnu.org&#x2F;software&#x2F;screen&#x2F;&quot;&gt;screen&lt;&#x2F;a&gt;, or GNU screen, is a terminal multiplexer. It allows to manage multiple terminal sessions within the same console. In a way, it does the same thing as modern terminal emulators such as &lt;a href=&quot;https:&#x2F;&#x2F;gnometerminator.blogspot.com&#x2F;&quot;&gt;Terminator&lt;&#x2F;a&gt; or &lt;a href=&quot;https:&#x2F;&#x2F;www.enlightenment.org&#x2F;about-terminology&quot;&gt;Terminology&lt;&#x2F;a&gt; with their built-in tab system and layout management. The main benefit is that screen also works through an SSH connection: you will be able to use your screen knowledge and configuration on any machine supporting screen in the world!&lt;&#x2F;p&gt;
+&lt;p&gt;screen has been around for almost 30 years so it&#x27;s pretty stable now. It is released under the GPL license.&lt;&#x2F;p&gt;
+&lt;p&gt;The main issue I had when starting with screen was its relative difficulty when compared to simple terminal emulators. So &lt;strong&gt;I will make a tour of the most useful keyboard shortcuts for a practical use&lt;&#x2F;strong&gt;, and share with you my screen config. You can also jump directly to the &lt;a href=&quot;https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;screen-terminal-multiplexer&#x2F;#cheatsheet-of-the-main-commands&quot;&gt;cheatsheet&lt;&#x2F;a&gt; if you want.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;basic-usage&quot;&gt;Basic usage&lt;&#x2F;h2&gt;
+&lt;p&gt;screen is not installed by default, so you need to install it first using your package manager.&lt;&#x2F;p&gt;
+&lt;p&gt;To &lt;strong&gt;start screen&lt;&#x2F;strong&gt;, open a terminal and run the command &lt;code&gt;screen&lt;&#x2F;code&gt;. Not that hard, is it?&lt;&#x2F;p&gt;
+&lt;p&gt;We&#x27;re ready to start learning screen. Don&#x27;t worry, that&#x27;s only a few commands!&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;window-management&quot;&gt;Window management&lt;&#x2F;h3&gt;
+&lt;p&gt;Now you have opened screen, the first thing you need to know is how to &lt;strong&gt;create a new &quot;window&quot;&lt;&#x2F;strong&gt; (i.e. a new virtual terminal). To do so, press the keys &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt;, and then press &lt;code&gt;c&lt;&#x2F;code&gt;. The screen shortcuts all consist of &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; (called &quot;escape key&quot; or &quot;prefix&quot;) followed by another key. You now have two windows opened running in parallel, you can have vim in the first one, and a bash in the second one for example, and that&#x27;s what screen is all about.&lt;&#x2F;p&gt;
+&lt;p&gt;You can &lt;strong&gt;visualize all the opened windows&lt;&#x2F;strong&gt; with &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&quot;&lt;&#x2F;code&gt;. This view allows you to navigate through your windows with the arrow keys, the 0-9 numbers and the enter key. This command is great because it gives you a global overview of your current session, I used it a lot at first.&lt;&#x2F;p&gt;
+&lt;p&gt;But there are more ways to &lt;strong&gt;navigate through the windows&lt;&#x2F;strong&gt;! I personally use almost exclusively the commands &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;p&lt;&#x2F;code&gt; (&lt;strong&gt;p&lt;&#x2F;strong&gt;revious window) and  &lt;code&gt;Ctrl + a&lt;&#x2F;code&gt; &lt;code&gt;n&lt;&#x2F;code&gt; (&lt;strong&gt;n&lt;&#x2F;strong&gt;ext window). These shortcuts require to have your windows in mind though, but it comes with practice. And don&#x27;t forget &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&quot;&lt;&#x2F;code&gt; is here to rescue you in case of doubt. ;)&lt;&#x2F;p&gt;
+&lt;p&gt;It&#x27;s also possible to jump to another window with the command &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;em&gt;&lt;code&gt;number&lt;&#x2F;code&gt;&lt;&#x2F;em&gt;, where &lt;em&gt;number&lt;&#x2F;em&gt; is a number between 0 and 9. This matches the &quot;Num&quot; column of the &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&quot;&lt;&#x2F;code&gt; view.&lt;&#x2F;p&gt;
+&lt;p&gt;Finally, you can &lt;strong&gt;kill a window&lt;&#x2F;strong&gt; when you have no use for it anymore. To do so, just press &lt;code&gt;Ctrl+d&lt;&#x2F;code&gt; in the shell. There&#x27;s also a screen command with the &quot;same&quot; effect but it&#x27;s usually better to proceed this way. Note if you kill all the windows of a session, the session terminates.&lt;&#x2F;p&gt;
+&lt;hr &#x2F;&gt;
+&lt;p&gt;Summary:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;c&lt;&#x2F;code&gt; to create a new window&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&quot;&lt;&#x2F;code&gt; to visualize the opened windows&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;p&lt;&#x2F;code&gt; and &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;n&lt;&#x2F;code&gt; to switch with the previous&#x2F;next window&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;em&gt;&lt;code&gt;number&lt;&#x2F;code&gt;&lt;&#x2F;em&gt; to switch to the window &lt;em&gt;number&lt;&#x2F;em&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+d&lt;&#x2F;code&gt; to kill a window&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;session-management&quot;&gt;Session management&lt;&#x2F;h3&gt;
+&lt;p&gt;Now you can manage your windows, it is time you learn how to manage your screen sessions.&lt;&#x2F;p&gt;
+&lt;p&gt;You just learned you can terminate a session by killing all its windows, that&#x27;s a good start. We will now see how to &lt;strong&gt;exit a session without killing it&lt;&#x2F;strong&gt;. It means you&#x27;ll be able to manage multiple persistent sessions in parallel. This is called &quot;detaching&quot; a session. To be clear, a &lt;strong&gt;detached session&lt;&#x2F;strong&gt; is a session which is still active in background, but on which no one is connected. An &lt;strong&gt;attached session&lt;&#x2F;strong&gt; is a session which is active and currently used.&lt;&#x2F;p&gt;
+&lt;p&gt;The first thing I&#x27;ll ask you to do is to kill your current screen session if you haven&#x27;t done it already. You can then &lt;strong&gt;list all your screen sessions&lt;&#x2F;strong&gt; by running the command &lt;code&gt;screen -ls&lt;&#x2F;code&gt;. If all your sessions are closed, it should print something like:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;No Sockets found in &#x2F;var&#x2F;run&#x2F;screen&#x2F;S-thiht.
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Now, we&#x27;ll start a &lt;strong&gt;new session&lt;&#x2F;strong&gt;, but &lt;strong&gt;we&#x27;ll give it a name&lt;&#x2F;strong&gt; so that we can come back to it more easily later. Run the command &lt;code&gt;screen -S my_session&lt;&#x2F;code&gt;. If you run the command &lt;code&gt;screen -ls&lt;&#x2F;code&gt;, you should obtain something like:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;There is a screen on:
+&lt;&#x2F;span&gt;&lt;span&gt;    10321.my_session        (Attached)
+&lt;&#x2F;span&gt;&lt;span&gt;1 Socket in &#x2F;var&#x2F;run&#x2F;screen&#x2F;S-thiht.
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Since you&#x27;re connected to the session, it&#x27;s presented as &lt;strong&gt;attached&lt;&#x2F;strong&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;Now you&#x27;re connected to a session named &quot;my_session&quot;, you can &lt;strong&gt;detach it from the current terminal&lt;&#x2F;strong&gt; with the command &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;d&lt;&#x2F;code&gt;. This should result in a message like:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;[detached from 10321.my_session]
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;As usual, you can list the currently running sessions with &lt;code&gt;screen -ls&lt;&#x2F;code&gt;. This time, &quot;my_session&quot; should be listed as &lt;strong&gt;detached&lt;&#x2F;strong&gt;:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;There is a screen on:
+&lt;&#x2F;span&gt;&lt;span&gt;    10321.my_session        (Detached)
+&lt;&#x2F;span&gt;&lt;span&gt;1 Socket in &#x2F;var&#x2F;run&#x2F;screen&#x2F;S-thiht.
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;I suggest you start and detach a few screen sessions to understand how it works. &lt;strong&gt;Be careful not to use the same session name twice&lt;&#x2F;strong&gt;, screen allows it but it can be more painful to resume a session if there are name conflicts.&lt;&#x2F;p&gt;
+&lt;p&gt;With multiple screen sessions, the &lt;code&gt;screen -ls&lt;&#x2F;code&gt; gives something like:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;There are screens on:
+&lt;&#x2F;span&gt;&lt;span&gt;    10474.downloads (Detached)
+&lt;&#x2F;span&gt;&lt;span&gt;    10427.work      (Detached)
+&lt;&#x2F;span&gt;&lt;span&gt;    10321.my_session        (Detached)
+&lt;&#x2F;span&gt;&lt;span&gt;3 Sockets in &#x2F;var&#x2F;run&#x2F;screen&#x2F;S-thiht.
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;If there aren&#x27;t any conflicts, you can &lt;strong&gt;resume a session&lt;&#x2F;strong&gt; simply with the command &lt;code&gt;screen -x session_name&lt;&#x2F;code&gt;. So for example if you run &lt;code&gt;screen -x my_session&lt;&#x2F;code&gt;, your session &quot;my_session&quot; will be resumed with the windows you opened before! And if you run &lt;code&gt;screen -ls&lt;&#x2F;code&gt;, it should appear as &lt;strong&gt;attached&lt;&#x2F;strong&gt;:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;There are screens on:
+&lt;&#x2F;span&gt;&lt;span&gt;    10474.downloads (Detached)
+&lt;&#x2F;span&gt;&lt;span&gt;    10427.work      (Detached)
+&lt;&#x2F;span&gt;&lt;span&gt;    10321.my_session        (Attached)
+&lt;&#x2F;span&gt;&lt;span&gt;3 Sockets in &#x2F;var&#x2F;run&#x2F;screen&#x2F;S-thiht.
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;A last useful thing you should know is how to &lt;strong&gt;kill a detached session without connecting to it&lt;&#x2F;strong&gt;. To do so, the command to run is a bit tricky: &lt;code&gt;screen -S session_name -X quit&lt;&#x2F;code&gt;. This means you pass the command &quot;quit&quot; to the session named &quot;session_name&quot;. It&#x27;s a bit hard to remember so I generally simply resume my session and kill all its windows one by one.&lt;&#x2F;p&gt;
+&lt;hr &#x2F;&gt;
+&lt;p&gt;Summary:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;screen -ls&lt;&#x2F;code&gt; to list the sessions and their status&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;screen -S session_name&lt;&#x2F;code&gt; to start a session with a given name. The name
+should be unique&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;d&lt;&#x2F;code&gt; to detach a session&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;screen -x session_name&lt;&#x2F;code&gt; to resume (reattach) a session knowing its name&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;screen -S session_name -X quit&lt;&#x2F;code&gt; to terminate a detached session&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h2 id=&quot;advanced-usage&quot;&gt;Advanced usage&lt;&#x2F;h2&gt;
+&lt;p&gt;The hardest part is over! You have discovered screen and you know how to use it. All you need now is practice.&lt;&#x2F;p&gt;
+&lt;p&gt;In this section, I&#x27;ll present a few interesting features of screen, but they&#x27;re definitely not necessary to use it, so feel free to come back and read this part later.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;layout-management&quot;&gt;Layout management&lt;&#x2F;h3&gt;
+&lt;p&gt;In the introduction, I talked about how Terminator and Terminology can work as layout managers. The good news is screen also permits to do that. So to &lt;strong&gt;split horizontally&lt;&#x2F;strong&gt;, you can use the command &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;S&lt;&#x2F;code&gt;, and to &lt;strong&gt;split vertically&lt;&#x2F;strong&gt; you can use &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;|&lt;&#x2F;code&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;To &lt;strong&gt;switch to the next region&lt;&#x2F;strong&gt; (this is how the split panes are called), the command to use is &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&amp;lt;Tab&amp;gt;&lt;&#x2F;code&gt;. Each region behaves normally: you can run any command you have learned so far.&lt;&#x2F;p&gt;
+&lt;p&gt;To &lt;strong&gt;close the current region&lt;&#x2F;strong&gt;, use &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;X&lt;&#x2F;code&gt;. If you work with a lot of panes, you can &lt;strong&gt;close them all but the current one&lt;&#x2F;strong&gt; with &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;Q&lt;&#x2F;code&gt;.&lt;&#x2F;p&gt;
+&lt;hr &#x2F;&gt;
+&lt;p&gt;Summary:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;S&lt;&#x2F;code&gt; to split horizontally&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;|&lt;&#x2F;code&gt; to split vertically&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&amp;lt;Tab&amp;gt;&lt;&#x2F;code&gt; to switch to the next region&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;X&lt;&#x2F;code&gt; to close the current region&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;Q&lt;&#x2F;code&gt; to close all the regions but the current one&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;work-with-the-buffer&quot;&gt;Work with the buffer&lt;&#x2F;h3&gt;
+&lt;p&gt;To follow, I&#x27;ll talk about an important feature of screen: the copy mode, or scrollback mode.&lt;&#x2F;p&gt;
+&lt;p&gt;To &lt;strong&gt;enter the copy mode&lt;&#x2F;strong&gt;, the command is either &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&amp;lt;Esc&amp;gt;&lt;&#x2F;code&gt; or &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;[&lt;&#x2F;code&gt;, choose your side. The copy mode allows you to &lt;strong&gt;navigate through the console buffer without using your mouse&lt;&#x2F;strong&gt;. Since you can&#x27;t use your wheel to scroll by default, this is the normal way to go back in the results. This mode lets you use some vim commands for the movements (arrow keys, &lt;code&gt;0&lt;&#x2F;code&gt;, &lt;code&gt;$&lt;&#x2F;code&gt;, &lt;code&gt;g&lt;&#x2F;code&gt;, &lt;code&gt;G&lt;&#x2F;code&gt;, etc.).&lt;&#x2F;p&gt;
+&lt;p&gt;You can &lt;strong&gt;copy some text&lt;&#x2F;strong&gt; (that&#x27;s what the mode is for!) by marking the beginning and the end of a section with the space bar. You can then &lt;strong&gt;paste it&lt;&#x2F;strong&gt; with &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;]&lt;&#x2F;code&gt;.  For more informations, check the &lt;code&gt;man screen&lt;&#x2F;code&gt; and look for &quot;copy&quot;.&lt;&#x2F;p&gt;
+&lt;hr &#x2F;&gt;
+&lt;p&gt;Summary:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&amp;lt;Esc&amp;gt;&lt;&#x2F;code&gt; or &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;[&lt;&#x2F;code&gt; to enter in copy mode&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;Space&amp;gt;&lt;&#x2F;code&gt; to select and copy some text in copy mode&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;]&lt;&#x2F;code&gt; to paste the content of the buffer&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;session-sharing&quot;&gt;Session sharing&lt;&#x2F;h3&gt;
+&lt;p&gt;I&#x27;ll finish with a last screen feature I want you to know about: it allows to share a session between multiple users. When working on a remote server, this comes really handy.&lt;&#x2F;p&gt;
+&lt;p&gt;So first, you have to start a session as usual. Then, we&#x27;ll use the command mode of screen to enable the multiuser mode and give the access right to some users. To &lt;strong&gt;enter the command mode&lt;&#x2F;strong&gt;, type &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;:&lt;&#x2F;code&gt;. You can then &lt;strong&gt;enable the multiuser mode&lt;&#x2F;strong&gt; with the command &lt;strong&gt;multiuser on&lt;&#x2F;strong&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;Then to &lt;strong&gt;add a specific user to the session&lt;&#x2F;strong&gt;, enter the command mode again with &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;:&lt;&#x2F;code&gt; and type the command &lt;strong&gt;acladd &lt;em&gt;username&lt;&#x2F;em&gt;&lt;&#x2F;strong&gt; (ACL stands for &quot;Access Control List&quot;) with the name of the user you want to add instead of &lt;em&gt;username&lt;&#x2F;em&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;The user &lt;em&gt;username&lt;&#x2F;em&gt; is now able to &lt;strong&gt;join your session&lt;&#x2F;strong&gt; simply with the command &lt;code&gt;screen -x your_username&#x2F;session_name&lt;&#x2F;code&gt;. The session is completely shared, which means you can see what the other users do in real time and so can they.&lt;&#x2F;p&gt;
+&lt;p&gt;When a session is shared with multiple users, it can be nice to &lt;strong&gt;know who is currently connected on it&lt;&#x2F;strong&gt;. You can have this info and more thanks to the command &lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;*&lt;&#x2F;code&gt;. The view shows a few useful informations, namely the window a user is currently using, or their permissions.&lt;&#x2F;p&gt;
+&lt;p&gt;Finally, you can &lt;strong&gt;revoke the access rights of user&lt;&#x2F;strong&gt; with the command &lt;strong&gt;acldel &lt;em&gt;username&lt;&#x2F;em&gt;&lt;&#x2F;strong&gt; in command mode. There&#x27;s more you can do to manage a shared session, but I won&#x27;t go into details, the man page covers everything. Now you have a basic understanding of screen, it should be easier to understand.&lt;&#x2F;p&gt;
+&lt;hr &#x2F;&gt;
+&lt;p&gt;Summary:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;:&lt;&#x2F;code&gt; to switch to command mode
+&lt;ul&gt;
+&lt;li&gt;&quot;multiuser on&quot; to enable the multiuser mode&lt;&#x2F;li&gt;
+&lt;li&gt;&quot;acladd &lt;em&gt;username&lt;&#x2F;em&gt;&quot; to give the access rights to the user &lt;em&gt;username&lt;&#x2F;em&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&quot;acldel &lt;em&gt;username&lt;&#x2F;em&gt;&quot; to remove the access rights to the user &lt;em&gt;username&lt;&#x2F;em&gt;&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;screen -x owner&#x2F;session_name&lt;&#x2F;code&gt; to join a session started by another user&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;*&lt;&#x2F;code&gt; to list the other connections to a session&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h2 id=&quot;practical-tips&quot;&gt;Practical tips&lt;&#x2F;h2&gt;
+&lt;h3 id=&quot;automatically-list-the-screen-sessions&quot;&gt;Automatically list the screen sessions&lt;&#x2F;h3&gt;
+&lt;p&gt;When I start my terminal, I like it to list the current screen sessions. To do so, I simply added the &lt;code&gt;screen -ls&lt;&#x2F;code&gt; command to my .bashrc. So now whenever I open a terminal, I&#x27;m welcomed with my screen status:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;There are screens on:
+&lt;&#x2F;span&gt;&lt;span&gt;    2927.my_screen3 (Attached)
+&lt;&#x2F;span&gt;&lt;span&gt;    2882.my_screen2 (Attached)
+&lt;&#x2F;span&gt;&lt;span&gt;    2840.my_screen1 (Detached)
+&lt;&#x2F;span&gt;&lt;span&gt;3 Sockets in &#x2F;var&#x2F;run&#x2F;screen&#x2F;S-thiht.
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Not only is it really useful to have this status without asking for it, but it is also a good way to think about always using screen.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;good-aliases&quot;&gt;Good aliases&lt;&#x2F;h3&gt;
+&lt;p&gt;As you&#x27;re now aware, screen uses a lot of options. I tried to keep only the most useful in this article but they&#x27;re still a pain to remember. A good way to remember them is to use aliases. I personally use the following:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;alias sn=&amp;#39;screen -S&amp;#39;  # sn for screen new
+&lt;&#x2F;span&gt;&lt;span&gt;alias sl=&amp;#39;screen -ls&amp;#39; # sl for screen list
+&lt;&#x2F;span&gt;&lt;span&gt;alias sr=&amp;#39;screen -x&amp;#39;  # sr for screen resume
+&lt;&#x2F;span&gt;&lt;span&gt;function sk() {
+&lt;&#x2F;span&gt;&lt;span&gt;    # sk for screen kill
+&lt;&#x2F;span&gt;&lt;span&gt;    # function instead of alias because the order of the parameters matters
+&lt;&#x2F;span&gt;&lt;span&gt;    screen -S &amp;quot;$1&amp;quot; -X quit
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;These aliases don&#x27;t conflict with anything standard and they&#x27;re really easier to remember and to type, so I strongly advise you to use them!&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;custom-configuration&quot;&gt;Custom configuration&lt;&#x2F;h3&gt;
+&lt;p&gt;screen can be customized in various ways through a .screenrc file, located in your home folder. One of the most useful tricks is the status bar.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;img src=&quot;https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;screen-terminal-multiplexer&#x2F;.&#x2F;screen-session-with-status-bar.png&quot; alt=&quot;screen session with a status bar&quot; &#x2F;&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;I won&#x27;t go through the configuration of screen in details (you can read &lt;code&gt;man screen&lt;&#x2F;code&gt; or other articles to learn more), but simply share my commented .screenrc with you:&lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#2b303b;color:#c0c5ce;&quot;&gt;&lt;code&gt;&lt;span&gt;# enable the altscreen
+&lt;&#x2F;span&gt;&lt;span&gt;# for example in vim, it allows to scroll with the mouse without
+&lt;&#x2F;span&gt;&lt;span&gt;# &amp;quot;overflowing&amp;quot; on the terminal
+&lt;&#x2F;span&gt;&lt;span&gt;# also it doesn&amp;#39;t &amp;quot;pollute&amp;quot; the terminal when you quit vim
+&lt;&#x2F;span&gt;&lt;span&gt;altscreen on
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;# automatically detach the session if the terminal is closed
+&lt;&#x2F;span&gt;&lt;span&gt;autodetach on
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;# larger command history
+&lt;&#x2F;span&gt;&lt;span&gt;defscrollback 10000
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;# set the encoding of the windows to utf-8
+&lt;&#x2F;span&gt;&lt;span&gt;defutf8 on
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;# disable the startup message
+&lt;&#x2F;span&gt;&lt;span&gt;startup_message off
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;# allow to scroll
+&lt;&#x2F;span&gt;&lt;span&gt;termcapinfo xterm* ti@:te@
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;# disable the annoying visual bell
+&lt;&#x2F;span&gt;&lt;span&gt;vbell off
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;# status bar
+&lt;&#x2F;span&gt;&lt;span&gt;# %{= wk}: set the color to white on black
+&lt;&#x2F;span&gt;&lt;span&gt;# %S: screen session name
+&lt;&#x2F;span&gt;&lt;span&gt;# %-w: previous windows
+&lt;&#x2F;span&gt;&lt;span&gt;# %{= kw}: set the color to black on white
+&lt;&#x2F;span&gt;&lt;span&gt;# %n: current window number
+&lt;&#x2F;span&gt;&lt;span&gt;# %t: current window title
+&lt;&#x2F;span&gt;&lt;span&gt;# %{= wk}: set the color to white on black
+&lt;&#x2F;span&gt;&lt;span&gt;# %+w: next windows
+&lt;&#x2F;span&gt;&lt;span&gt;caption always &amp;quot;%{= wk}%S: %-w%{= kw}%n %t%{= wk}%+w&amp;quot;
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Note you can enable any of these options directly from screen&#x27;s command mode.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;cheatsheet-of-the-main-commands&quot;&gt;Cheatsheet of the main commands&lt;&#x2F;h3&gt;
+&lt;h4 id=&quot;basic-usage-1&quot;&gt;Basic usage&lt;&#x2F;h4&gt;
+&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Command&lt;&#x2F;th&gt;&lt;th&gt;Description&lt;&#x2F;th&gt;&lt;&#x2F;tr&gt;&lt;&#x2F;thead&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;screen&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Start a session&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;screen -ls &lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;&lt;strong&gt;L&lt;&#x2F;strong&gt;i&lt;strong&gt;s&lt;&#x2F;strong&gt;t the sessions and their status&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;screen -S session_name&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;&lt;strong&gt;S&lt;&#x2F;strong&gt;tart a session named &quot;session_name&quot;&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;screen -x session_name&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Resume the session named &quot;session_name&quot;&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;screen -S session_name -X quit&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Terminate the session named &quot;session_name&quot;&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;&#x2F;tbody&gt;&lt;&#x2F;table&gt;
+&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Command&lt;&#x2F;th&gt;&lt;th&gt;Description&lt;&#x2F;th&gt;&lt;&#x2F;tr&gt;&lt;&#x2F;thead&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;c&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;&lt;strong&gt;C&lt;&#x2F;strong&gt;reate a new window&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;k&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;&lt;strong&gt;K&lt;&#x2F;strong&gt;ill the current window (&lt;a href=&quot;https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;End-of-transmission_character&quot;&gt;&lt;code&gt;Ctrl+d&lt;&#x2F;code&gt;&lt;&#x2F;a&gt; does the same thing)&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&quot;&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;List the opened windows&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;p&lt;&#x2F;code&gt;&#x2F;&lt;code&gt;n&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Go to the &lt;strong&gt;p&lt;&#x2F;strong&gt;revious&#x2F;&lt;strong&gt;n&lt;&#x2F;strong&gt;ext window&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;0&lt;&#x2F;code&gt;-&lt;code&gt;9&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Go to the window &lt;em&gt;n&lt;&#x2F;em&gt;&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;d&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;&lt;strong&gt;D&lt;&#x2F;strong&gt;etach the screen session&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;:&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Enter the command mode&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;&#x2F;tbody&gt;&lt;&#x2F;table&gt;
+&lt;h4 id=&quot;split-mode&quot;&gt;Split mode&lt;&#x2F;h4&gt;
+&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Command&lt;&#x2F;th&gt;&lt;th&gt;Action&lt;&#x2F;th&gt;&lt;&#x2F;tr&gt;&lt;&#x2F;thead&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;S&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;&lt;strong&gt;S&lt;&#x2F;strong&gt;plit horizontally&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; `&lt;&#x2F;td&gt;&lt;td&gt;`&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&amp;lt;Tab&amp;gt;&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Go to the next region&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;X&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Close the current region&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;Q&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Close all the regions but the current one&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;&#x2F;tbody&gt;&lt;&#x2F;table&gt;
+&lt;h4 id=&quot;copy-mode&quot;&gt;Copy mode&lt;&#x2F;h4&gt;
+&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Command&lt;&#x2F;th&gt;&lt;th&gt;Action&lt;&#x2F;th&gt;&lt;&#x2F;tr&gt;&lt;&#x2F;thead&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;&amp;lt;Esc&amp;gt;&lt;&#x2F;code&gt;&#x2F;&lt;code&gt;[&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Enter the copy mode&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;&amp;lt;Space&amp;gt;&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Mark a selection&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;]&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Paste the content of the buffer&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;&#x2F;tbody&gt;&lt;&#x2F;table&gt;
+&lt;h4 id=&quot;shared-session&quot;&gt;Shared session&lt;&#x2F;h4&gt;
+&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Command&lt;&#x2F;th&gt;&lt;th&gt;Action&lt;&#x2F;th&gt;&lt;&#x2F;tr&gt;&lt;&#x2F;thead&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;:&lt;&#x2F;code&gt; &lt;code&gt;multiuser on&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Enable the multiuser mode&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;:&lt;&#x2F;code&gt; &lt;code&gt;acladd username&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Give the access rights to &lt;em&gt;username&lt;&#x2F;em&gt;&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;:&lt;&#x2F;code&gt; &lt;code&gt;acldel username&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Revoke the access rights to &lt;em&gt;username&lt;&#x2F;em&gt;&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;Ctrl+a&lt;&#x2F;code&gt; &lt;code&gt;*&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;List the other connections to the session&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;screen -x owner&#x2F;session_name&lt;&#x2F;code&gt;&lt;&#x2F;td&gt;&lt;td&gt;Join a session started by another user&lt;&#x2F;td&gt;&lt;&#x2F;tr&gt;
+&lt;&#x2F;tbody&gt;&lt;&#x2F;table&gt;
+&lt;h2 id=&quot;conclusion&quot;&gt;Conclusion&lt;&#x2F;h2&gt;
+&lt;p&gt;screen is a powerful tool if you use the terminal a lot. Yet, it has some drawbacks, that can be pretty annoying. To list a few you &lt;strong&gt;will&lt;&#x2F;strong&gt; be confronted to if you really try to use it:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;bad UTF-8 support. There are a few configurations to make screen work fine with unicode, but it&#x27;s still a bit messy. I am not even sure there is a proper way to handle UTF-8 characters in the status bar...&lt;&#x2F;li&gt;
+&lt;li&gt;insane status bar configuration. You can see it in the .screenrc I provided, crafting a neat status bar is really hard. It&#x27;s a shame given how useful they are!&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Good news though, all these issues are allegedly solved with &lt;a href=&quot;https:&#x2F;&#x2F;tmux.github.io&#x2F;&quot;&gt;tmux&lt;&#x2F;a&gt;, another more recent terminal mutiplexer. I&#x27;ve only used it as a replacement of screen for a few days so I will wait a bit before reviewing it, but it&#x27;s very similar to screen in its usage, and I&#x27;m very satisfied with it so far.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+</feed>

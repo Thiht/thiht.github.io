@@ -1,5 +1,14 @@
 {% extends "base.html" %}
 
+{% block opengraph %}
+<meta property="og:site_name" content="Thibaut Rousseau's Blog">
+<meta property="og:title" content="{{ page.title }}">
+<meta property="og:url" content="{{ page.permalink }}">
+<meta property="og:description" content="{{ page.description }}">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://blog.thibaut-rousseau.com/raccoon.png">
+{% endblock opengraph %}
+
 {% block content %}
 <h1 class="text-center">
   {{ page.title }}

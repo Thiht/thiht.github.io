@@ -13,10 +13,26 @@
 <h1 class="text-center">
   {{ page.title }}
 </h1>
-<p class="text-center"><small>Published on {{ page.date }}</small></p>
+<p class="text-center"><small>Published on <time datetime="{{ page.date }}">{{ page.date }}</time></small></p>
 <p class="text-center"><small>Reading time estimated to {{ page.reading_time }} minutes</small></p>
 
 <div class="prose mx-auto py-10">
   {{ page.content | safe }}
 </div>
+
+<script
+  src="https://giscus.app/client.js"
+  data-repo="thiht/thiht.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnk0NzI5MDY0MA=="
+  data-category="Comments"
+  data-category-id="DIC_kwDOAtGZEM4CmJ2J"
+  data-mapping="og:title"
+  data-strict="1"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-input-position="top"
+  data-theme="preferred_color_scheme"
+  data-lang="en"
+  crossorigin="anonymous"
+  async></script>
 {% endblock content %}

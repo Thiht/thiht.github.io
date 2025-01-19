@@ -17,3 +17,8 @@
   font-family: "IBM Plex Sans";
   src: url(/fonts/IBMPlexSans-Regular.ttf);
 }
+
+.giscus {
+  max-width: 800px;
+  margin: auto;
+}

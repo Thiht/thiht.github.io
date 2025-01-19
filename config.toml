@@ -1,6 +1,7 @@
 base_url = "https://blog.thibaut-rousseau.com"
 build_search_index = true
 generate_feeds = true
+title = "Thibaut Rousseau's Blog"
 author = "Thibaut Rousseau"
 taxonomies = [
   { name = "tags", render = false }

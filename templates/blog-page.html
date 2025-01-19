@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
+{% block title %}{{ page.title }} | {{ super() }}{% endblock title %}
+
 {% block opengraph %}
-<meta property="og:site_name" content="Thibaut Rousseau's Blog" />
+<meta property="og:site_name" content="{{ config.title }}" />
 <meta property="og:title" content="{{ page.title }}" />
 <meta property="og:url" content="{{ page.permalink }}" />
 <meta property="og:description" content="{{ page.description }}" />

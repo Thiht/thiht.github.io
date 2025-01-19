@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Thibaut Rousseau's Blog</title>
+    <title>{% block title %}{{ config.title }}{% endblock title %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/styles/styles.css" />
     <link rel="stylesheet" href="{{ get_url(path="styles/styles.css", cachebust=true) }}" />
@@ -11,7 +11,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
     <link rel="shortcut icon" href="/favicon/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="Thibaut Rousseau's Blog" />
+    <meta name="apple-mobile-web-app-title" content="{{ config.title }}" />
     <link rel="manifest" href="/favicon/site.webmanifest" />
     <script defer src="https://cloud.umami.is/script.js" data-website-id="e9d5dca2-2e51-4c77-83d3-b88122f7a1d9"></script>
     <meta name="fediverse:creator" content="@thiht@mastodon.social" />
@@ -20,13 +20,13 @@
 
   <body class="bg-stone-50">
     <nav class="text-center px-2 py-5">
-      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">Thibaut Rousseau's Blog</a></h1>
+      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">{{ config.title }}</a></h1>
     </nav>
 
     <div class="px-5">{% block content %}{% endblock %}</div>
 
     <footer class="text-center px-2 py-5">
-      <p>&copy; 2025 Thibaut Rousseau</p>
+      <p>&copy; {{ now() | date(format="%Y") }} {{ config.author }}</p>
       <p>
         <a href="/atom.xml" title="Subscribe to my feed">
           <img src="/icons/rss-color.svg" alt="RSS" class="inline-block" width="24" height="24" />

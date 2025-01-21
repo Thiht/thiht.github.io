@@ -1,6 +1,6 @@
 +++
 title = "SQL Transactions in Go: The Good Way"
-description = "A method to write transactions anywhere in your code, without leaking database internals"
+description = "A clean method to write transactions anywhere, without leaking database internals."
 date = 2025-01-21
 
 [taxonomies]
@@ -11,7 +11,7 @@ In my last work experience, I designed what I consider a pretty cool and efficie
 
 After dogfooding a solution for a while, I extracted it, improved it, and enriched it, to finally release it as the [transactor](https://github.com/Thiht/transactor) library. This library is now tested across the most common relational databases (PostgreSQL, MySQL, SQLite, MSSQL and Oracle), and is compatible with [`database/sql`](https://pkg.go.dev/database/sql), [jmoiron/sqlx](https://pkg.go.dev/github.com/jmoiron/sqlx) and [jackc/pgx](https://pkg.go.dev/github.com/jackc/pgx/v5).
 
-In my current job, transactors are now our main (soon to be unique!) way to manage database transactions, which is why I now feel comfortable talking about this method more widely.
+In my current job, transactors are now our main (soon to be unique!) way to manage database transactions, which is why I feel comfortable talking about this method more widely.
 
 In this article, I’ll walk you through the design and implementation so you can either use the lib, or adapt it and extend it depending on your needs.
 
@@ -19,9 +19,9 @@ In this article, I’ll walk you through the design and implementation so you ca
 
 In web services / APIs, it’s customary to use some kind of layered architecture, like Clean Architecture, Hexagonal Architecture, or anything that boils down to a three-tier architecture. In Go, it’s something like:
 
-1. Handlers (a.k.a. controllers): the entrypoints of the API, usually the only layer allowed to be aware of the router and current HTTP request/response handlers,
-2. Services (a.k.a. usecases): the business layer, where the domain logic lives,
-3. Stores (a.k.a. repositories, data access, storage, persistence…): the layer communicating with databases, caches, filesystems, and so on. It’s usually the only layer allowed to be aware of the concrete storage systems. In practice, it means it’s the only place where `database/sql`, your DB driver, or your ORM should be imported.
+1. <u>Handlers</u> (a.k.a. controllers): the entrypoints of the API, usually the only layer allowed to be aware of the router and current HTTP request/response handlers,
+2. <u>Services</u> (a.k.a. usecases): the business layer, where the domain logic lives,
+3. <u>Stores</u> (a.k.a. repositories, data access, storage, persistence…): the layer communicating with databases, caches, filesystems, and so on. It’s usually the only layer allowed to be aware of the concrete storage systems. In practice, it means it’s the only place where `database/sql`, your DB driver, or your ORM should be imported.
 
 Whether transactions should be allowed in the services layer is sometimes up for debate, as they’re somewhat tied to the DB implementation. In Go, a transaction is represented by `*sql.Tx`, but according to the definitions above, using it directly in the services layer would require importing `database/sql`. This is why it’s sometimes accepted that transactions should live in the storage layer only.
 

@@ -1,6 +1,21 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-cursive: Charm, cursive;
+}
+
+@plugin "@tailwindcss/typography";
+
+@utility prose {
+  code {
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+}
 
 @font-face {
   font-family: Charm;
@@ -19,6 +34,6 @@
 }
 
 .giscus {
-  max-width: 800px;
-  margin: auto;
+  @apply max-w-3xl;
+  @apply mx-auto;
 }

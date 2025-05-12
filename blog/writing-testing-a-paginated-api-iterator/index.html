@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Writing &amp; Testing a Paginated API Iterator in Go | Thibaut Rousseau&#x27;s Blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles/styles.css" />
+    <link rel="stylesheet" href="https://blog.thibaut-rousseau.com/styles/styles.css?h=2875531d7e09b44420ee" />
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml" />
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Thibaut Rousseau&#x27;s Blog" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="e9d5dca2-2e51-4c77-83d3-b88122f7a1d9"></script>
+    <meta name="fediverse:creator" content="@thiht@mastodon.social" />
+    
+<meta property="og:site_name" content="Thibaut Rousseau&#x27;s Blog" />
+<meta property="og:title" content="Writing &amp; Testing a Paginated API Iterator in Go" />
+<meta property="og:url" content="https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;writing-testing-a-paginated-api-iterator&#x2F;" />
+<meta property="og:description" content="Writing and unit-testing Go 1.23 iterators can be tricky. This article shows a full-featured example using GitHub&#x27;s public API." />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="https://blog.thibaut-rousseau.com/images/og-image.png" />
+
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+      mermaid.initialize({
+        theme: 'neutral',
+      })
+    </script>
+  </head>
+
+  <body class="bg-stone-50">
+    <nav class="text-center px-2 py-5">
+      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">Thibaut Rousseau&#x27;s Blog</a></h1>
+    </nav>
+
+    <div class="px-5">
+<h1 class="text-center">
+  Writing &amp; Testing a Paginated API Iterator in Go
+</h1>
+<p class="text-center"><small>Published on <time datetime="2024-12-19">2024-12-19</time></small></p>
+<p class="text-center"><small>Reading time estimated to 8 minutes</small></p>
+
+<div class="prose mx-auto py-10">
+  <p><strong>Go 1.23</strong>, amongst <a href="https://tip.golang.org/doc/go1.23">other features</a>, brought <a href="https://pkg.go.dev/iter">Iterators</a> to the standard library.</p>
+<p>Iterators are basically a way to make the <code>range</code> operator work on functions implementing a specific interface. This lets you write code like this:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#b48ead;">for </span><span style="color:#bf616a;">value </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">myIterator</span><span>() {
+</span><span>  </span><span style="color:#65737e;">// ...
+</span><span>}
+</span></code></pre>
+<p>The main difference with using <code>range</code> over a slice or a map is that an iterator can fetch data lazily. I doesn’t need to fetch all the data at once before writing the loop. This comes really handy for consuming paginated APIs: we can write an iterator abstracting the pagination logic, making the code more readable and reusable.</p>
+<p>In this article I’ll show you how to <strong>write a custom iterator</strong> for consuming a paginated HTTP API (we’ll use GitHub’s API as an example), and how to <strong>test it</strong> properly by leveraging <a href="https://pkg.go.dev/iter#hdr-Pulling_Values">Pull Iterators</a>.</p>
+<hr />
+<p>Note that this article will not discuss the design of iterators in Go, we’ll just see how to use and work with them. For more information on iterators, I recommend these articles:</p>
+<ul>
+<li><a href="https://eli.thegreenplace.net/2024/ranging-over-functions-in-go-123/">Ranging over functions in Go 1.23</a></li>
+<li><a href="https://go.dev/blog/range-functions">Range Over Function Types</a></li>
+</ul>
+<h2 id="writing-an-iterator">Writing an Iterator</h2>
+<p>Iterators can return up to two values. They must implement one of these signatures:</p>
+<ul>
+<li><a href="https://pkg.go.dev/iter#Seq"><code>iter.Seq</code></a> (<code>func(yield func(V) bool</code>): iterators over sequences of 1 value</li>
+<li><a href="https://pkg.go.dev/iter#Seq2"><code>iter.Seq2</code></a> (<code>func(yield func(K, V) bool</code>): iterators over sequences of 2 values</li>
+<li><code>func(yield func() bool)</code>: iterators over sequence of… no value :)</li>
+</ul>
+<p>For iterators working over remote resources like APIs, the emerging idiom is to use the second value for error handling. In practice, using our iterator will look like this:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#65737e;">// IterateResources is a function returning an iter.Seq2[K, error]
+</span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">resource</span><span>, </span><span style="color:#bf616a;">err </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">IterateResources</span><span>(</span><span style="color:#bf616a;">ctx</span><span>, </span><span style="color:#bf616a;">apiClient</span><span>) {
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#d08770;">nil </span><span>{
+</span><span>        </span><span style="color:#65737e;">// handle error
+</span><span>        </span><span style="color:#b48ead;">break
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// use resource
+</span><span>}
+</span></code></pre>
+<p>I noticed a few naming conventions for functions returning an iterator:</p>
+<ul>
+<li><code>IterateResources</code></li>
+<li><code>IterResources</code></li>
+<li><code>ResourcesSeq</code></li>
+</ul>
+<p>I’m not sure yet which is the more common, but I went with <code>Iterate</code> in this article as it feels clearer.</p>
+<hr />
+<p>We’ll implement an iterator looking like the above using the <a href="https://docs.github.com/fr/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-a-user">GitHub API to list the repositories of a user</a>.</p>
+<p>I chose this API for 3 reasons:</p>
+<ol>
+<li>it's public and doesn't require authentication. You can give it a try in a terminal:<pre data-lang="sh" style="background-color:#2b303b;color:#c0c5ce;" class="language-sh "><code class="language-sh" data-lang="sh"><span style="color:#bf616a;">curl </span><span>&#39;</span><span style="color:#a3be8c;">https://api.github.com/users/thiht/repos?page=1&amp;per_page=5</span><span>&#39;
+</span></code></pre>
+</li>
+<li>it's paginated, so it's a good use-case for an iterator,</li>
+<li>the Go module <a href="https://pkg.go.dev/github.com/google/go-github/v67@v67.0.0">google/go-github</a> is readily available to interact with the GitHub API.</li>
+</ol>
+<p>With <a href="https://pkg.go.dev/github.com/google/go-github/v67@v67.0.0">google/go-github</a>, we’ll use the <a href="https://pkg.go.dev/github.com/google/go-github/v67@v67.0.0/github#RepositoriesService.ListByUser">RepositoriesService.ListByUser</a> method. As a starting point, let’s write a version of the code listing all <a href="https://github.com/Thiht?tab=repositories">my repositories</a>, without an iterator.</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#b48ead;">package </span><span style="color:#bf616a;">main
+</span><span>
+</span><span style="color:#b48ead;">import </span><span>(
+</span><span>  &quot;</span><span style="color:#a3be8c;">context</span><span>&quot;
+</span><span>
+</span><span>  &quot;</span><span style="color:#a3be8c;">github.com/google/go-github/v67/github</span><span>&quot;
+</span><span>)
+</span><span>
+</span><span style="color:#b48ead;">func </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>  </span><span style="color:#bf616a;">ctx </span><span>:= </span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>()
+</span><span>  </span><span style="color:#bf616a;">client </span><span>:= </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">NewClient</span><span>(</span><span style="color:#d08770;">nil</span><span>)
+</span><span>
+</span><span>  </span><span style="color:#bf616a;">user </span><span>:= &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;
+</span><span>
+</span><span>  </span><span style="color:#bf616a;">opts </span><span>:= &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">RepositoryListByUserOptions</span><span>{
+</span><span>    </span><span style="color:#bf616a;">ListOptions</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">ListOptions</span><span>{
+</span><span>      </span><span style="color:#bf616a;">Page</span><span>:    </span><span style="color:#d08770;">1</span><span>,
+</span><span>      </span><span style="color:#bf616a;">PerPage</span><span>: </span><span style="color:#d08770;">5</span><span>,
+</span><span>    },
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">for </span><span>{
+</span><span>    </span><span style="color:#bf616a;">repos</span><span>, </span><span style="color:#bf616a;">resp</span><span>, </span><span style="color:#bf616a;">err </span><span>:= </span><span style="color:#bf616a;">client</span><span>.</span><span style="color:#bf616a;">Repositories</span><span>.</span><span style="color:#bf616a;">ListByUser</span><span>(</span><span style="color:#bf616a;">ctx</span><span>, </span><span style="color:#bf616a;">user</span><span>, </span><span style="color:#bf616a;">opts</span><span>)
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#d08770;">nil </span><span>{
+</span><span>      </span><span style="color:#96b5b4;">panic</span><span>(</span><span style="color:#bf616a;">err</span><span>)
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">repo </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">repos </span><span>{
+</span><span>      </span><span style="color:#96b5b4;">println</span><span>(*</span><span style="color:#bf616a;">repo</span><span>.</span><span style="color:#bf616a;">FullName</span><span>)
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">resp</span><span>.</span><span style="color:#bf616a;">NextPage </span><span>== </span><span style="color:#d08770;">0 </span><span>{
+</span><span>      </span><span style="color:#b48ead;">break
+</span><span>    }
+</span><span>    </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">Page </span><span>= </span><span style="color:#bf616a;">resp</span><span>.</span><span style="color:#bf616a;">NextPage
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>The pagination parameters are passed via <code>ListOptions</code>, and the next page to fetch is retrieved at each loop from the <code>resp</code> result. I set the pagination settings to list the repositories 5 by 5 so that we get a chance to see the pagination in action.</p>
+<p>This code works fine, but it forces us to mix the pagination logic (checking the <code>NextPage</code> value and updating <code>opts.Page</code>) with our business logic (printing the repository name). It also suffers from a lack of standardization: any API you use will be different. Not only REST APIs, but also filesystem APIs, custom collections, or whatever. Iterators will help us abstract anything related to the pagination and focus on our own logic.</p>
+<p>Let’s now rewrite the same code with an iterator:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#b48ead;">package </span><span style="color:#bf616a;">main
+</span><span>
+</span><span style="color:#b48ead;">import </span><span>(
+</span><span>  &quot;</span><span style="color:#a3be8c;">context</span><span>&quot;
+</span><span>  &quot;</span><span style="color:#a3be8c;">iter</span><span>&quot;
+</span><span>
+</span><span>  &quot;</span><span style="color:#a3be8c;">github.com/google/go-github/v67/github</span><span>&quot;
+</span><span>)
+</span><span>
+</span><span style="color:#65737e;">// 1. Iterator usage
+</span><span style="color:#b48ead;">func </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>  </span><span style="color:#bf616a;">ctx </span><span>:= </span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>()
+</span><span>  </span><span style="color:#bf616a;">client </span><span>:= </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">NewClient</span><span>(</span><span style="color:#d08770;">nil</span><span>)
+</span><span>
+</span><span>  </span><span style="color:#bf616a;">user </span><span>:= &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">err </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">IterateRepositoriesByUser</span><span>(
+</span><span>    </span><span style="color:#bf616a;">ctx</span><span>, </span><span style="color:#bf616a;">client</span><span>.</span><span style="color:#bf616a;">Repositories</span><span>, </span><span style="color:#bf616a;">user</span><span>, </span><span style="color:#d08770;">nil</span><span>,
+</span><span>  ) {
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#d08770;">nil </span><span>{
+</span><span>      </span><span style="color:#96b5b4;">panic</span><span>(</span><span style="color:#bf616a;">err</span><span>)
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#96b5b4;">println</span><span>(*</span><span style="color:#bf616a;">repo</span><span>.</span><span style="color:#bf616a;">FullName</span><span>)
+</span><span>  }
+</span><span>}
+</span><span>
+</span><span style="color:#65737e;">// 2. Iterator implementation
+</span><span style="color:#b48ead;">func </span><span style="color:#8fa1b3;">IterateRepositoriesByUser</span><span>(
+</span><span>  </span><span style="color:#bf616a;">ctx context</span><span>.</span><span style="color:#b48ead;">Context</span><span>, </span><span style="color:#bf616a;">client </span><span style="color:#b48ead;">RepositoryLister</span><span>, </span><span style="color:#bf616a;">user </span><span style="color:#b48ead;">string</span><span>,
+</span><span>  </span><span style="color:#bf616a;">opts </span><span>*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">RepositoryListByUserOptions</span><span>,
+</span><span>) </span><span style="color:#bf616a;">iter</span><span>.</span><span style="color:#b48ead;">Seq2</span><span>[*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>, </span><span style="color:#bf616a;">error</span><span>] {
+</span><span>  </span><span style="color:#b48ead;">return func</span><span>(</span><span style="color:#bf616a;">yield </span><span style="color:#b48ead;">func</span><span>(*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Repository</span><span>, </span><span style="color:#b48ead;">error</span><span>) </span><span style="color:#b48ead;">bool</span><span>) {
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// 2.1. Initialization
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">opts </span><span>== </span><span style="color:#d08770;">nil </span><span>{
+</span><span>      </span><span style="color:#bf616a;">opts </span><span>= &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">RepositoryListByUserOptions</span><span>{}
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">Page </span><span>== </span><span style="color:#d08770;">0 </span><span>{
+</span><span>      </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">Page </span><span>= </span><span style="color:#d08770;">1
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">PerPage </span><span>== </span><span style="color:#d08770;">0 </span><span>{
+</span><span>      </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">PerPage </span><span>= </span><span style="color:#d08770;">5
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// 2.2. Pagination loop
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">for </span><span>{
+</span><span>      </span><span style="color:#bf616a;">repos</span><span>, </span><span style="color:#bf616a;">response</span><span>, </span><span style="color:#bf616a;">err </span><span>:= </span><span style="color:#bf616a;">client</span><span>.</span><span style="color:#bf616a;">ListByUser</span><span>(</span><span style="color:#bf616a;">ctx</span><span>, </span><span style="color:#bf616a;">user</span><span>, </span><span style="color:#bf616a;">opts</span><span>)
+</span><span>      </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#d08770;">nil </span><span>{
+</span><span>        </span><span style="color:#bf616a;">yield</span><span>(</span><span style="color:#d08770;">nil</span><span>, </span><span style="color:#bf616a;">err</span><span>)
+</span><span>        </span><span style="color:#b48ead;">return
+</span><span>      }
+</span><span>
+</span><span>      </span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">repo </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">repos </span><span>{
+</span><span>        </span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">yield</span><span>(</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#d08770;">nil</span><span>) {
+</span><span>          </span><span style="color:#b48ead;">return
+</span><span>        }
+</span><span>      }
+</span><span>
+</span><span>      </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">response</span><span>.</span><span style="color:#bf616a;">NextPage </span><span>== </span><span style="color:#d08770;">0 </span><span>{
+</span><span>        </span><span style="color:#b48ead;">return
+</span><span>      }
+</span><span>      </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">Page </span><span>= </span><span style="color:#bf616a;">response</span><span>.</span><span style="color:#bf616a;">NextPage
+</span><span>    }
+</span><span>  }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">type </span><span>RepositoryLister </span><span style="color:#b48ead;">interface </span><span>{
+</span><span>  </span><span style="color:#8fa1b3;">ListByUser</span><span>(
+</span><span>    </span><span style="color:#bf616a;">ctx context</span><span>.</span><span style="color:#b48ead;">Context</span><span>, </span><span style="color:#bf616a;">user </span><span style="color:#b48ead;">string</span><span>,
+</span><span>    </span><span style="color:#bf616a;">opts </span><span>*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">RepositoryListByUserOptions</span><span>,
+</span><span>  ) ([]*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Repository</span><span>, *</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Response</span><span>, </span><span style="color:#b48ead;">error</span><span>)
+</span><span>}
+</span></code></pre>
+<p>As you can see, the iterator version is slightly more verbose, but it's more reusable and has the benefit of isolating the pagination logic from the rest of the code. Keep in mind in real life projects you’ll modify the business logic of the loop more often than you’ll modify the iterator itself, so it makes sense to take a bit of time writing an iterator to get simpler business code.</p>
+<p><code>IterateRepositoriesByUser</code> is not an iterator itself, but a function returning an iterator. This lets us pass the parameters that will be available in the scope of the iterator: the context, the GitHub client, the target user, and the additional options.</p>
+<p>I declared a <code>RepositoryLister</code> interface to make it easier to test the iterator, we’ll come back to it in the next part.</p>
+<p>The iterator consists of these steps:</p>
+<ul>
+<li><strong>2.1:</strong> Initialization of the pagination params before calling the API: the pagination starts at page 1 on the GitHub API,</li>
+<li><strong>2.2:</strong> Main loop listing the user’s repositories. Note that this is roughly the same code we had in the implementation without iterator: the pagination logic stays the same. The main difference is the use of <code>yield</code> to return our values and errors to <code>range</code>:
+<ul>
+<li>If <code>ListByUser</code> fails, yield the error and return: I decided to return unconditionally in case of failure, because I want the <code>range</code> to end if <code>ListByUser</code> fails.</li>
+<li>If <code>ListByUser</code> succeeds, the repositories are yielded one by one.</li>
+</ul>
+</li>
+</ul>
+<p>As a reminder:</p>
+<ul>
+<li><code>yield</code> returns <code>true</code> if the <code>range</code> loop continues (if the <code>continue</code> keyword is used, or if the loop continues to the next iteration),</li>
+<li><code>yield</code> returns <code>false</code> if the <code>range</code> loop stops (if <code>break</code> or <code>return</code> are used, or if the loop is interrupted).</li>
+</ul>
+<h2 id="testing-the-iterator">Testing the Iterator</h2>
+<p>It can be a bit challenging to write tests for an iterator. In our tests we need to make sure that:</p>
+<ul>
+<li>the iterator contains the elements we expect, in the correct order,</li>
+<li>the iterator doesn’t contain <strong>more</strong> elements than we expect.</li>
+</ul>
+<h3 id="mocking-repositorylister">Mocking <code>RepositoryLister</code></h3>
+<p>Using a mock is not the only way to write this test, just my personal preference. As <code>github.NewClient</code> accepts an <code>*http.Client</code> as a parameter, we could instead use <a href="https://pkg.go.dev/net/http/httptest"><code>net/http/httptest</code></a> to control the HTTP calls and their responses.</p>
+<p>In the above example, we used an interface <code>RepositoryLister</code> to abstract the GitHub API client. Thanks to this abstraction, we can mock the GitHub API client in our tests. We could use a mocking library like <a href="https://vektra.github.io/mockery/latest/">mockery</a> to generate a mock for this interface automatically, but I'll write it manually for this example:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#b48ead;">import </span><span>(
+</span><span>  &quot;</span><span style="color:#a3be8c;">context</span><span>&quot;
+</span><span>  &quot;</span><span style="color:#a3be8c;">fmt</span><span>&quot;
+</span><span>  &quot;</span><span style="color:#a3be8c;">testing</span><span>&quot;
+</span><span>
+</span><span>  &quot;</span><span style="color:#a3be8c;">github.com/google/go-github/v67/github</span><span>&quot;
+</span><span>)
+</span><span>
+</span><span style="color:#b48ead;">type </span><span>repositoryListerMock </span><span style="color:#b48ead;">struct </span><span>{
+</span><span>  </span><span style="color:#bf616a;">t     </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T
+</span><span>  </span><span style="color:#bf616a;">calls </span><span>[]</span><span style="color:#b48ead;">callListByUser
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">type </span><span>callListByUser </span><span style="color:#b48ead;">struct </span><span>{
+</span><span>  </span><span style="color:#bf616a;">expectPage </span><span style="color:#b48ead;">int
+</span><span>  </span><span style="color:#bf616a;">repos      </span><span>[]*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Repository
+</span><span>  </span><span style="color:#bf616a;">resp       </span><span>*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Response
+</span><span>  </span><span style="color:#bf616a;">err        </span><span style="color:#b48ead;">error
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">func </span><span style="color:#8fa1b3;">newRepositoryListerMock</span><span>(</span><span style="color:#bf616a;">t </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T</span><span>, </span><span style="color:#bf616a;">calls </span><span>...</span><span style="color:#b48ead;">callListByUser</span><span>) *</span><span style="color:#b48ead;">repositoryListerMock </span><span>{
+</span><span>  </span><span style="color:#bf616a;">mock </span><span>:= </span><span style="color:#bf616a;">repositoryListerMock</span><span>{</span><span style="color:#bf616a;">t</span><span>: </span><span style="color:#bf616a;">t</span><span>, </span><span style="color:#bf616a;">calls</span><span>: </span><span style="color:#bf616a;">calls</span><span>}
+</span><span>  </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Cleanup</span><span>(</span><span style="color:#b48ead;">func</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">if </span><span style="color:#96b5b4;">len</span><span>(</span><span style="color:#bf616a;">mock</span><span>.</span><span style="color:#bf616a;">calls</span><span>) &gt; </span><span style="color:#d08770;">0 </span><span>{
+</span><span>      </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatalf</span><span>(&quot;</span><span style="color:#d08770;">%d</span><span style="color:#a3be8c;"> unfulfilled calls to ListByUser</span><span>&quot;, </span><span style="color:#96b5b4;">len</span><span>(</span><span style="color:#bf616a;">mock</span><span>.</span><span style="color:#bf616a;">calls</span><span>))
+</span><span>    }
+</span><span>  })
+</span><span>  </span><span style="color:#b48ead;">return </span><span>&amp;</span><span style="color:#bf616a;">mock
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">func </span><span>(</span><span style="color:#bf616a;">r </span><span>*</span><span style="color:#b48ead;">repositoryListerMock</span><span>) </span><span style="color:#8fa1b3;">ListByUser</span><span>(</span><span style="color:#bf616a;">ctx context</span><span>.</span><span style="color:#b48ead;">Context</span><span>, </span><span style="color:#bf616a;">user </span><span style="color:#b48ead;">string</span><span>, </span><span style="color:#bf616a;">opts </span><span>*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">RepositoryListByUserOptions</span><span>) ([]*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Repository</span><span>, *</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Response</span><span>, </span><span style="color:#b48ead;">error</span><span>) {
+</span><span>  </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Helper</span><span>()
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">if </span><span style="color:#96b5b4;">len</span><span>(</span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">calls</span><span>) == </span><span style="color:#d08770;">0 </span><span>{
+</span><span>    </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">no result registered for ListByUser</span><span>&quot;)
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">Page </span><span>!= </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">calls</span><span>[</span><span style="color:#d08770;">0</span><span>].</span><span style="color:#bf616a;">expectPage </span><span>{
+</span><span>    </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatalf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected page: got </span><span style="color:#d08770;">%d</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%d</span><span>&quot;, </span><span style="color:#bf616a;">opts</span><span>.</span><span style="color:#bf616a;">Page</span><span>, </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">calls</span><span>[</span><span style="color:#d08770;">0</span><span>].</span><span style="color:#bf616a;">expectPage</span><span>)
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#bf616a;">result </span><span>:= </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">calls</span><span>[</span><span style="color:#d08770;">0</span><span>]
+</span><span>  </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">calls </span><span>= </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">calls</span><span>[</span><span style="color:#d08770;">1</span><span>:]
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">result</span><span>.</span><span style="color:#bf616a;">repos</span><span>, </span><span style="color:#bf616a;">result</span><span>.</span><span style="color:#bf616a;">resp</span><span>, </span><span style="color:#bf616a;">result</span><span>.</span><span style="color:#bf616a;">err
+</span><span>}
+</span></code></pre>
+<p>This mock lets you register the expected calls to <code>ListByUser</code> and the results you want to return.
+It can be used as follows, in place of a <code>RepositoryLister</code>:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#b48ead;">func </span><span style="color:#8fa1b3;">Test_repositoryListerMock</span><span>(</span><span style="color:#bf616a;">t </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T</span><span>) {
+</span><span>  </span><span style="color:#bf616a;">mockClient </span><span>:= </span><span style="color:#bf616a;">newRepositoryListerMock</span><span>(</span><span style="color:#bf616a;">t</span><span>,
+</span><span>    </span><span style="color:#bf616a;">callListByUser</span><span>{ </span><span style="color:#65737e;">// First call
+</span><span>      </span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">1</span><span>,
+</span><span>      </span><span style="color:#bf616a;">repos</span><span>: []*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{
+</span><span>        {</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example</span><span>&quot;)},
+</span><span>      },
+</span><span>      </span><span style="color:#bf616a;">resp</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Response</span><span>{</span><span style="color:#bf616a;">NextPage</span><span>: </span><span style="color:#d08770;">2</span><span>},
+</span><span>    },
+</span><span>    </span><span style="color:#bf616a;">callListByUser</span><span>{ </span><span style="color:#65737e;">// Second call
+</span><span>      </span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">2</span><span>,
+</span><span>      </span><span style="color:#bf616a;">err</span><span>:        </span><span style="color:#bf616a;">fmt</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">an error occurred</span><span>&quot;),
+</span><span>    },
+</span><span>  )
+</span><span>
+</span><span>  </span><span style="color:#bf616a;">repos</span><span>, </span><span style="color:#bf616a;">resp</span><span>, </span><span style="color:#bf616a;">err </span><span>:= </span><span style="color:#bf616a;">mockClient</span><span>.</span><span style="color:#bf616a;">ListByUser</span><span>(</span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>(), &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;, &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">RepositoryListByUserOptions</span><span>{
+</span><span>    </span><span style="color:#bf616a;">ListOptions</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">ListOptions</span><span>{</span><span style="color:#bf616a;">Page</span><span>: </span><span style="color:#d08770;">1</span><span>},
+</span><span>  })
+</span><span>  </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#d08770;">nil </span><span>{
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected error </span><span style="color:#d08770;">%v</span><span style="color:#a3be8c;">:</span><span>&quot;, </span><span style="color:#bf616a;">err</span><span>)
+</span><span>  }
+</span><span>  </span><span style="color:#b48ead;">if </span><span style="color:#96b5b4;">len</span><span>(</span><span style="color:#bf616a;">repos</span><span>) != </span><span style="color:#d08770;">1 </span><span>{
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected number of repositories: got </span><span style="color:#d08770;">%d</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%d</span><span>&quot;, </span><span style="color:#96b5b4;">len</span><span>(</span><span style="color:#bf616a;">repos</span><span>), </span><span style="color:#d08770;">1</span><span>)
+</span><span>  }
+</span><span>  </span><span style="color:#b48ead;">if </span><span>*</span><span style="color:#bf616a;">repos</span><span>[</span><span style="color:#d08770;">0</span><span>].</span><span style="color:#bf616a;">FullName </span><span>!= &quot;</span><span style="color:#a3be8c;">example</span><span>&quot; {
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected repository name: got </span><span style="color:#d08770;">%q</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%q</span><span>&quot;, *</span><span style="color:#bf616a;">repos</span><span>[</span><span style="color:#d08770;">0</span><span>].</span><span style="color:#bf616a;">FullName</span><span>, &quot;</span><span style="color:#a3be8c;">example</span><span>&quot;)
+</span><span>  }
+</span><span>  </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">resp</span><span>.</span><span style="color:#bf616a;">NextPage </span><span>!= </span><span style="color:#d08770;">2 </span><span>{
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected next page: got </span><span style="color:#d08770;">%d</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%d</span><span>&quot;, </span><span style="color:#bf616a;">resp</span><span>.</span><span style="color:#bf616a;">NextPage</span><span>, </span><span style="color:#d08770;">2</span><span>)
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">err </span><span>= </span><span style="color:#bf616a;">mockClient</span><span>.</span><span style="color:#bf616a;">ListByUser</span><span>(</span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>(), &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;, &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">RepositoryListByUserOptions</span><span>{
+</span><span>    </span><span style="color:#bf616a;">ListOptions</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">ListOptions</span><span>{</span><span style="color:#bf616a;">Page</span><span>: </span><span style="color:#d08770;">2</span><span>},
+</span><span>  })
+</span><span>  </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>== </span><span style="color:#d08770;">nil </span><span>{
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">expected error, got nil</span><span>&quot;)
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#65737e;">// An additional call to ListByUser will fail because there are no more results
+</span><span>  </span><span style="color:#65737e;">// mockClient.ListByUser(context.Background(), &quot;thiht&quot;, nil)
+</span><span>}
+</span></code></pre>
+<h3 id="writing-tests-for-the-sequence">Writing tests for the sequence</h3>
+<p>To test an iterator, I find it easier to first write down the expected sequence of values it returns. To do so, we can start by defining a type to represent the 2 values returned by an iteration:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span>  </span><span style="color:#b48ead;">type </span><span>iteration </span><span style="color:#b48ead;">struct </span><span>{
+</span><span>    </span><span style="color:#bf616a;">repo </span><span>*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Repository
+</span><span>    </span><span style="color:#bf616a;">err  </span><span style="color:#b48ead;">error
+</span><span>  }
+</span></code></pre>
+<p>This way we’ll be able to declare an expected sequence for a test:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#bf616a;">expectedIterations </span><span>:= []</span><span style="color:#b48ead;">iteration</span><span>{
+</span><span>  {</span><span style="color:#bf616a;">repo</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example1</span><span>&quot;)}},
+</span><span>  {</span><span style="color:#bf616a;">repo</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example2</span><span>&quot;)}},
+</span><span>}
+</span></code></pre>
+<p>Before writing our test, let’s setup our GitHub client mock with the expected responses to match this expected sequence:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#bf616a;">client </span><span>:= &amp;</span><span style="color:#bf616a;">repositoryListerMock</span><span>{
+</span><span>  </span><span style="color:#bf616a;">t</span><span>: </span><span style="color:#bf616a;">t</span><span>,
+</span><span>  </span><span style="color:#bf616a;">calls</span><span>: []</span><span style="color:#b48ead;">callListByUser</span><span>{
+</span><span>    {
+</span><span>      </span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">1</span><span>,
+</span><span>      </span><span style="color:#bf616a;">repos</span><span>: []*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{
+</span><span>        {</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example1</span><span>&quot;)},
+</span><span>        {</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example2</span><span>&quot;)},
+</span><span>      },
+</span><span>      </span><span style="color:#bf616a;">resp</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Response</span><span>{</span><span style="color:#bf616a;">NextPage</span><span>: </span><span style="color:#d08770;">0</span><span>},
+</span><span>    },
+</span><span>  },
+</span><span>}
+</span></code></pre>
+<p>Our <code>repositoryListerMock</code> implements ListByUser, will return 2 repositories on the first page, and signal there’s no next page to fetch.</p>
+<p>With all of this setup, we can finally test the iterator itself. The first trick here is to convert our iterator to a <strong>pull iterator</strong> to get finer control over the iteration sequence:</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#65737e;">// 1. Initialize the iterator
+</span><span style="color:#bf616a;">next</span><span>, </span><span style="color:#bf616a;">stop </span><span>:= </span><span style="color:#bf616a;">iter</span><span>.</span><span style="color:#bf616a;">Pull2</span><span>(</span><span style="color:#bf616a;">IterateRepositoriesByUser</span><span>(</span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>(), </span><span style="color:#bf616a;">client</span><span>, &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;, </span><span style="color:#d08770;">nil</span><span>))
+</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Cleanup</span><span>(</span><span style="color:#bf616a;">stop</span><span>)
+</span><span>
+</span><span style="color:#65737e;">// 2. Iterate and compare to the expected sequence
+</span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">expected </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">expectedIterations </span><span>{
+</span><span>  </span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>()
+</span><span>  </span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">ok </span><span>{
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected end of iteration</span><span>&quot;)
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">reflect</span><span>.</span><span style="color:#bf616a;">DeepEqual</span><span>(</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>) {
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected repository: got </span><span style="color:#d08770;">%+v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%+v</span><span>&quot;, </span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>)
+</span><span>  }
+</span><span>  </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err </span><span>{
+</span><span>    </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected error: got </span><span style="color:#d08770;">%v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%v</span><span>&quot;, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err</span><span>)
+</span><span>  }
+</span><span>}
+</span><span>
+</span><span style="color:#65737e;">// 3. Ensure the iterator is empty
+</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>(); </span><span style="color:#bf616a;">ok </span><span>{
+</span><span>  </span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected iteration</span><span>&quot;)
+</span><span>}
+</span></code></pre>
+<p>The actual testing consists of 3 parts:</p>
+<ol>
+<li>First, the iterator is initialized by calling <code>IterateRepositoriesByUser</code> with its expected parameters, including the mock client we created previously. We call <a href="https://pkg.go.dev/iter#Pull2"><code>iter.Pull2</code></a> to convert the iterator to a push iterator, which gives us 2 new variables: <code>next</code> and <code>stop</code>. <code>next</code> will give us the next values in the iterator, and a boolean indicating whether it still contained values.</li>
+<li>Then, we loop on the <code>expectedIterations</code>. That’s the second trick, we don’t loop directly on the iterator but instead on the sequence we expect. This lets us check all the values we expect one by one.
+<ul>
+<li>The first action in the loop is to call <code>next</code> to iterate. If the <code>ok</code> value returned by the iterator is <code>false</code> it means we expected more values than the iterator gave us, so the test fails.</li>
+<li>Then, we can simply check that the returned <code>*github.Repository</code> and <code>error</code> are the ones we expected.</li>
+</ul>
+</li>
+<li>Finally we need to call <code>next</code> one last time to ensure the iterator is empty. If the <code>ok</code> value is <code>true</code>, it means the iterator contains more values than we expected. The test fails, and we need to rework our <code>expectedSequence</code>.</li>
+</ol>
+<p>This approach makes it easy to test all the possible cases for this iterator. The below examples show how to write a few additional tests, such as an iterator calling multiple pages of results, or an iterator returning an unexpected error.</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#b48ead;">func </span><span style="color:#8fa1b3;">TestIterateRepositoriesByUser</span><span>(</span><span style="color:#bf616a;">t </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T</span><span>) {
+</span><span>	</span><span style="color:#b48ead;">type </span><span>iteration </span><span style="color:#b48ead;">struct </span><span>{
+</span><span>		</span><span style="color:#bf616a;">repo </span><span>*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#b48ead;">Repository
+</span><span>		</span><span style="color:#bf616a;">err  </span><span style="color:#b48ead;">error
+</span><span>	}
+</span><span>
+</span><span>	</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Run</span><span>(&quot;</span><span style="color:#a3be8c;">1 page of repositories</span><span>&quot;, </span><span style="color:#b48ead;">func</span><span>(</span><span style="color:#bf616a;">t </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T</span><span>) {
+</span><span>		</span><span style="color:#bf616a;">client </span><span>:= &amp;</span><span style="color:#bf616a;">repositoryListerMock</span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>: </span><span style="color:#bf616a;">t</span><span>,
+</span><span>			</span><span style="color:#bf616a;">calls</span><span>: []</span><span style="color:#b48ead;">callListByUser</span><span>{
+</span><span>				{
+</span><span>					</span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">1</span><span>,
+</span><span>					</span><span style="color:#bf616a;">repos</span><span>: []*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{
+</span><span>						{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example1</span><span>&quot;)},
+</span><span>						{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example2</span><span>&quot;)},
+</span><span>					},
+</span><span>					</span><span style="color:#bf616a;">resp</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Response</span><span>{</span><span style="color:#bf616a;">NextPage</span><span>: </span><span style="color:#d08770;">0</span><span>},
+</span><span>				},
+</span><span>			},
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">expectedIterations </span><span>:= []</span><span style="color:#b48ead;">iteration</span><span>{
+</span><span>			{</span><span style="color:#bf616a;">repo</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example1</span><span>&quot;)}},
+</span><span>			{</span><span style="color:#bf616a;">repo</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example2</span><span>&quot;)}},
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">next</span><span>, </span><span style="color:#bf616a;">stop </span><span>:= </span><span style="color:#bf616a;">iter</span><span>.</span><span style="color:#bf616a;">Pull2</span><span>(</span><span style="color:#bf616a;">IterateRepositoriesByUser</span><span>(</span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>(), </span><span style="color:#bf616a;">client</span><span>, &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;, </span><span style="color:#d08770;">nil</span><span>))
+</span><span>		</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Cleanup</span><span>(</span><span style="color:#bf616a;">stop</span><span>)
+</span><span>
+</span><span>		</span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">expected </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">expectedIterations </span><span>{
+</span><span>			</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>()
+</span><span>			</span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">ok </span><span>{
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected end of iteration</span><span>&quot;)
+</span><span>			}
+</span><span>
+</span><span>			</span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">reflect</span><span>.</span><span style="color:#bf616a;">DeepEqual</span><span>(</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>) {
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected repository: got </span><span style="color:#d08770;">%+v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%+v</span><span>&quot;, </span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>)
+</span><span>			}
+</span><span>			</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err </span><span>{
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected error: got </span><span style="color:#d08770;">%v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%v</span><span>&quot;, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err</span><span>)
+</span><span>			}
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>(); </span><span style="color:#bf616a;">ok </span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected iteration</span><span>&quot;)
+</span><span>		}
+</span><span>	})
+</span><span>
+</span><span>	</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Run</span><span>(&quot;</span><span style="color:#a3be8c;">2 pages of repositories</span><span>&quot;, </span><span style="color:#b48ead;">func</span><span>(</span><span style="color:#bf616a;">t </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T</span><span>) {
+</span><span>		</span><span style="color:#bf616a;">client </span><span>:= &amp;</span><span style="color:#bf616a;">repositoryListerMock</span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>: </span><span style="color:#bf616a;">t</span><span>,
+</span><span>			</span><span style="color:#bf616a;">calls</span><span>: []</span><span style="color:#b48ead;">callListByUser</span><span>{
+</span><span>				{
+</span><span>					</span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">1</span><span>,
+</span><span>					</span><span style="color:#bf616a;">repos</span><span>: []*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{
+</span><span>						{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example1</span><span>&quot;)},
+</span><span>					},
+</span><span>					</span><span style="color:#bf616a;">resp</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Response</span><span>{</span><span style="color:#bf616a;">NextPage</span><span>: </span><span style="color:#d08770;">2</span><span>},
+</span><span>				},
+</span><span>				{
+</span><span>					</span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">2</span><span>,
+</span><span>					</span><span style="color:#bf616a;">repos</span><span>: []*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{
+</span><span>						{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example2</span><span>&quot;)},
+</span><span>					},
+</span><span>					</span><span style="color:#bf616a;">resp</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Response</span><span>{</span><span style="color:#bf616a;">NextPage</span><span>: </span><span style="color:#d08770;">0</span><span>},
+</span><span>				},
+</span><span>			},
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">expectedIterations </span><span>:= []</span><span style="color:#b48ead;">iteration</span><span>{
+</span><span>			{</span><span style="color:#bf616a;">repo</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example1</span><span>&quot;)}},
+</span><span>			{</span><span style="color:#bf616a;">repo</span><span>: &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{</span><span style="color:#bf616a;">FullName</span><span>: </span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">String</span><span>(&quot;</span><span style="color:#a3be8c;">example2</span><span>&quot;)}},
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">next</span><span>, </span><span style="color:#bf616a;">stop </span><span>:= </span><span style="color:#bf616a;">iter</span><span>.</span><span style="color:#bf616a;">Pull2</span><span>(</span><span style="color:#bf616a;">IterateRepositoriesByUser</span><span>(</span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>(), </span><span style="color:#bf616a;">client</span><span>, &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;, </span><span style="color:#d08770;">nil</span><span>))
+</span><span>		</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Cleanup</span><span>(</span><span style="color:#bf616a;">stop</span><span>)
+</span><span>
+</span><span>		</span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">expected </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">expectedIterations </span><span>{
+</span><span>			</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>()
+</span><span>			</span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">ok </span><span>{
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected end of iteration</span><span>&quot;)
+</span><span>			}
+</span><span>
+</span><span>			</span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">reflect</span><span>.</span><span style="color:#bf616a;">DeepEqual</span><span>(</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>) {
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected repository: got </span><span style="color:#d08770;">%+v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%+v</span><span>&quot;, </span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>)
+</span><span>			}
+</span><span>			</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err </span><span>{
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected error: got </span><span style="color:#d08770;">%v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%v</span><span>&quot;, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err</span><span>)
+</span><span>			}
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>(); </span><span style="color:#bf616a;">ok </span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected iteration</span><span>&quot;)
+</span><span>		}
+</span><span>	})
+</span><span>
+</span><span>	</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Run</span><span>(&quot;</span><span style="color:#a3be8c;">api error</span><span>&quot;, </span><span style="color:#b48ead;">func</span><span>(</span><span style="color:#bf616a;">t </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T</span><span>) {
+</span><span>		</span><span style="color:#bf616a;">clientErr </span><span>:= </span><span style="color:#bf616a;">fmt</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">an error occurred</span><span>&quot;)
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">client </span><span>:= &amp;</span><span style="color:#bf616a;">repositoryListerMock</span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>: </span><span style="color:#bf616a;">t</span><span>,
+</span><span>			</span><span style="color:#bf616a;">calls</span><span>: []</span><span style="color:#b48ead;">callListByUser</span><span>{
+</span><span>				{
+</span><span>					</span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">1</span><span>,
+</span><span>					</span><span style="color:#bf616a;">err</span><span>:        </span><span style="color:#bf616a;">clientErr</span><span>,
+</span><span>				},
+</span><span>			},
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">expectedIterations </span><span>:= []</span><span style="color:#b48ead;">iteration</span><span>{
+</span><span>			{</span><span style="color:#bf616a;">err</span><span>: </span><span style="color:#bf616a;">clientErr</span><span>},
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">next</span><span>, </span><span style="color:#bf616a;">stop </span><span>:= </span><span style="color:#bf616a;">iter</span><span>.</span><span style="color:#bf616a;">Pull2</span><span>(</span><span style="color:#bf616a;">IterateRepositoriesByUser</span><span>(</span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>(), </span><span style="color:#bf616a;">client</span><span>, &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;, </span><span style="color:#d08770;">nil</span><span>))
+</span><span>		</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Cleanup</span><span>(</span><span style="color:#bf616a;">stop</span><span>)
+</span><span>
+</span><span>		</span><span style="color:#b48ead;">for </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">expected </span><span>:= </span><span style="color:#b48ead;">range </span><span style="color:#bf616a;">expectedIterations </span><span>{
+</span><span>			</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>()
+</span><span>			</span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">ok </span><span>{
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected end of iteration</span><span>&quot;)
+</span><span>			}
+</span><span>
+</span><span>			</span><span style="color:#b48ead;">if </span><span>!</span><span style="color:#bf616a;">reflect</span><span>.</span><span style="color:#bf616a;">DeepEqual</span><span>(</span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>) {
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected repository: got </span><span style="color:#d08770;">%+v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%+v</span><span>&quot;, </span><span style="color:#bf616a;">repo</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">repo</span><span>)
+</span><span>			}
+</span><span>			</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err </span><span>{
+</span><span>				</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Errorf</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected error: got </span><span style="color:#d08770;">%v</span><span style="color:#a3be8c;">, want </span><span style="color:#d08770;">%v</span><span>&quot;, </span><span style="color:#bf616a;">err</span><span>, </span><span style="color:#bf616a;">expected</span><span>.</span><span style="color:#bf616a;">err</span><span>)
+</span><span>			}
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>(); </span><span style="color:#bf616a;">ok </span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected iteration</span><span>&quot;)
+</span><span>		}
+</span><span>	})
+</span><span>
+</span><span>	</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Run</span><span>(&quot;</span><span style="color:#a3be8c;">no repositories</span><span>&quot;, </span><span style="color:#b48ead;">func</span><span>(</span><span style="color:#bf616a;">t </span><span>*</span><span style="color:#bf616a;">testing</span><span>.</span><span style="color:#b48ead;">T</span><span>) {
+</span><span>		</span><span style="color:#bf616a;">client </span><span>:= &amp;</span><span style="color:#bf616a;">repositoryListerMock</span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>: </span><span style="color:#bf616a;">t</span><span>,
+</span><span>			</span><span style="color:#bf616a;">calls</span><span>: []</span><span style="color:#b48ead;">callListByUser</span><span>{
+</span><span>				{
+</span><span>					</span><span style="color:#bf616a;">expectPage</span><span>: </span><span style="color:#d08770;">1</span><span>,
+</span><span>					</span><span style="color:#bf616a;">repos</span><span>:      []*</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Repository</span><span>{},
+</span><span>					</span><span style="color:#bf616a;">resp</span><span>:       &amp;</span><span style="color:#bf616a;">github</span><span>.</span><span style="color:#bf616a;">Response</span><span>{</span><span style="color:#bf616a;">NextPage</span><span>: </span><span style="color:#d08770;">0</span><span>},
+</span><span>				},
+</span><span>			},
+</span><span>		}
+</span><span>
+</span><span>		</span><span style="color:#bf616a;">next</span><span>, </span><span style="color:#bf616a;">stop </span><span>:= </span><span style="color:#bf616a;">iter</span><span>.</span><span style="color:#bf616a;">Pull2</span><span>(</span><span style="color:#bf616a;">IterateRepositoriesByUser</span><span>(</span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">Background</span><span>(), </span><span style="color:#bf616a;">client</span><span>, &quot;</span><span style="color:#a3be8c;">thiht</span><span>&quot;, </span><span style="color:#d08770;">nil</span><span>))
+</span><span>		</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Cleanup</span><span>(</span><span style="color:#bf616a;">stop</span><span>)
+</span><span>
+</span><span>		</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">ok </span><span>:= </span><span style="color:#bf616a;">next</span><span>(); </span><span style="color:#bf616a;">ok </span><span>{
+</span><span>			</span><span style="color:#bf616a;">t</span><span>.</span><span style="color:#bf616a;">Fatal</span><span>(&quot;</span><span style="color:#a3be8c;">unexpected iteration</span><span>&quot;)
+</span><span>		}
+</span><span>	})
+</span><span>}
+</span></code></pre>
+
+</div>
+
+<script
+  src="https://giscus.app/client.js"
+  data-repo="thiht/thiht.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnk0NzI5MDY0MA=="
+  data-category="Comments"
+  data-category-id="DIC_kwDOAtGZEM4CmJ2J"
+  data-mapping="og:title"
+  data-strict="1"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-input-position="top"
+  data-theme="light"
+  data-lang="en"
+  crossorigin="anonymous"
+  async></script>
+</div>
+
+    <footer class="text-center px-2 py-5">
+      <p>&copy; 2025 Thibaut Rousseau</p>
+      <p>
+        <a href="/atom.xml" title="Subscribe to my feed">
+          <img src="/icons/rss-color.svg" alt="RSS" class="inline-block" width="24" height="24" />
+        </a>
+        <a href="https://github.com/Thiht" title="Follow me on GitHub">
+          <img src="/icons/github-color.svg" alt="GitHub" class="inline-block" width="24" height="24" />
+        </a>
+        <a rel="me" href="https://mastodon.social/@thiht" title="Follow me on Mastodon">
+          <img src="/icons/mastodon-color.svg" alt="Mastodon" class="inline-block" width="24" height="24" />
+        <a
+          href="bitcoin:bc1qawxn5u2rqupvp043rwamn67d383ggd2tc2tfr3?amount=0.000015"
+          title="Donate some Bitcoin"
+        >
+          <img src="/icons/bitcoin-color.svg" alt="Bitcoin" class="inline-block" width="24" height="24" />
+        </a>
+      </p>
+    </footer>
+  </body>
+</html>

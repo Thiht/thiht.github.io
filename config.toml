@@ -9,4 +9,4 @@ taxonomies = [
 
 [markdown]
 highlight_code = true
-
+extra_syntaxes_and_themes = ["syntaxes"]

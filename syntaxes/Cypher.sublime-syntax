@@ -1,0 +1,163 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/syntax.html
+name: Cypher
+file_extensions:
+  - cql
+  - cyp
+  - cypher
+scope: source.cypher
+contexts:
+  main:
+    - include: comments
+    - include: constants
+    - include: keywords
+    - include: functions
+    - include: path-patterns
+    - include: operators
+    - include: identifiers
+    - include: properties_literal
+    - include: numbers
+    - include: strings
+  comments:
+    - match: //.*$\n?
+      scope: comment.line.double-slash.cypher
+  constants:
+    - match: (?i)\bTRUE|FALSE\b
+      scope: constant.language.bool.cypher
+    - match: (?i)\bNULL\b
+      scope: constant.language.missing.cypher
+  functions:
+    - match: (?i)\b((NOT)(?=\s*\()|IS\s+NULL|IS\s+NOT\s+NULL)
+      comment: List of Cypher built-in functions from http://docs.neo4j.org/chunked/milestone/query-function.html
+      scope: keyword.control.function.boolean.cypher
+    - match: (?i)\b(ALL|ANY|NONE|SINGLE)(?=\s*\()
+      comment: List of Cypher built-in functions from http://docs.neo4j.org/chunked/milestone/query-function.html
+      scope: support.function.predicate.cypher
+    - match: (?i)\b(LENGTH|TYPE|ID|COALESCE|HEAD|LAST|TIMESTAMP|STARTNODE|ENDNODE|TOINT|TOFLOAT)(?=\s*\()
+      comment: List of Cypher built-in functions from http://docs.neo4j.org/chunked/milestone/query-function.html
+      scope: support.function.scalar.cypher
+    - match: (?i)\b(NODES|RELATIONSHIPS|LABELS|EXTRACT|FILTER|TAIL|RANGE|REDUCE)(?=\s*\()
+      comment: List of Cypher built-in functions from http://docs.neo4j.org/chunked/milestone/query-function.html
+      scope: support.function.collection.cypher
+    - match: (?i)\b(ABS|ACOS|ASIN|ATAN|ATAN2|COS|COT|DEGREES|E|EXP|FLOOR|HAVERSIN|LOG|LOG10|PI|RADIANS|RAND|ROUND|SIGN|SIN|SQRT|TAN)(?=\s*\()
+      comment: List of Cypher built-in functions from http://docs.neo4j.org/chunked/milestone/query-function.html
+      scope: support.function.math.cypher
+    - match: (?i)\b(COUNT|sum|avg|max|min|stdev|stdevp|percentileDisc|percentileCont|collect)(?=\s*\()
+      comment: List of Cypher built-in functions from http://docs.neo4j.org/chunked/milestone/query-function.html
+      scope: support.function.aggregation.cypher
+    - match: (?i)\b(STR|REPLACE|SUBSTRING|LEFT|RIGHT|LTRIM|RTRIM|TRIM|LOWER|UPPER|SPLIT)(?=\s*\()
+      comment: List of Cypher built-in functions from http://docs.neo4j.org/chunked/milestone/query-function.html
+      scope: support.function.string.cypher
+  identifiers:
+    - match: "`.+?`"
+      scope: variable.other.quoted-identifier.cypher
+    - match: '[\p{L}_][\p{L}0-9_]*'
+      scope: variable.other.identifier.cypher
+  keywords:
+    - match: (?i)\b(START|MATCH|WHERE|RETURN|UNION|FOREACH|WITH|AS|LIMIT|SKIP|UNWIND|HAS|DISTINCT|OPTIONAL\\s+MATCH|ORDER\s+BY)\b
+      scope: keyword.control.clause.cypher
+    - match: (?i)\b(ELSE|END|THEN|CASE|WHEN)\b
+      scope: keyword.control.case.cypher
+    - match: (?i)\b(FIELDTERMINATOR|USING\s+PERIODIC\s+COMMIT|HEADERS|LOAD\s+CSV|FROM)\b
+      scope: keyword.data.import.cypher
+    - match: (?i)\b(USING\s+INDEX|CREATE\s+INDEX\s+ON|DROP\s+INDEX\s+ON|CREATE\s+CONSTRAINT\s+ON|DROP\s+CONSTRAINT\s+ON)\b
+      scope: keyword.other.indexes.cypher
+    - match: (?i)\b(MERGE|DELETE|SET|REMOVE|ON\s+CREATE|ON\s+MATCH|CREATE\s+UNIQUE|CREATE)\b
+      scope: keyword.data.definition.cypher
+    - match: (?i)\b(DESC|ASC)\b
+      scope: keyword.other.order.cypher
+    - match: '(?i)\b(node|relationship|rel)((:)([\p{L}_-][\p{L}0-9_]*))?(?=\s*\()'
+      captures:
+        1: support.class.starting-functions-point.cypher
+        2: keyword.control.index-seperator.cypher
+        3: keyword.control.index-seperator.cypher
+        4: support.class.index.cypher
+      push:
+        - meta_scope: source.starting-functions.cypher
+        - match: \)
+          pop: true
+        - match: '((?:`.+?`)|(?:[\p{L}_][\p{L}0-9_]*))'
+          scope: variable.parameter.relationship-name.cypher
+        - match: (\*)
+          scope: keyword.control.starting-function-params.cypher
+        - include: comments
+        - include: numbers
+        - include: strings
+  numbers:
+    - match: \b\d+(\.\d+)?\b
+      scope: constant.numeric.cypher
+  operators:
+    - match: (\+|\-|\/|\*|\%|\?|!)
+      scope: keyword.operator.math.cypher
+    - match: (<=|=>|<>|<|>|=~|=)
+      scope: keyword.operator.compare.cypher
+    - match: (?i)\b(OR|AND|XOR|IS)\b
+      scope: keyword.operator.logical.cypher
+    - match: (?i)\b(IN)\b
+      scope: keyword.operator.in.cypher
+  path-patterns:
+    - match: (<--|-->|--)
+      scope: support.function.relationship-pattern.cypher
+    - match: '(<-|-)(\[)'
+      captures:
+        1: support.function.relationship-pattern-start.cypher
+        2: keyword.operator.relationship-pattern-start.cypher
+      push:
+        - meta_scope: path-pattern.cypher
+        - match: "(])(->|-)"
+          captures:
+            1: keyword.operator.relationship-pattern-end.cypher
+            2: support.function.relationship-pattern-end.cypher
+          pop: true
+        - include: identifiers
+        - match: '(:)((?:`.+?`)|(?:[\p{L}_][\p{L}0-9_]*))'
+          scope: entity.name.class.relationship-type.cypher
+          captures:
+            1: keyword.operator.relationship-type-start.cypher
+            2: entity.name.class.relationship.type.cypher
+        - match: '(\|)(\s*)((?:`.+?`)|(?:[\p{L}_][\p{L}0-9_]*))'
+          scope: entity.name.class.relationship-type-ored.cypher
+          captures:
+            1: support.type.operator.relationship-type-or.cypher
+            2: entity.name.class.relationship.type-or.cypher
+        - match: (?:\?\*|\?|\*)\s*(?:\d+\s*(?:\.\.\s*\d+)?)?
+          scope: support.function.relationship-pattern.quant.cypher
+        - include: properties_literal
+  properties_literal:
+    - match: "{"
+      captures:
+        0: keyword.control.properties_literal.cypher
+      push:
+        - meta_scope: source.cypher
+        - match: "}"
+          captures:
+            0: keyword.control.properties_literal.cypher
+          pop: true
+        - match: ":|,"
+          scope: keyword.control.properties_literal.seperator.cypher
+        - include: comments
+        - include: constants
+        - include: functions
+        - include: operators
+        - include: identifiers
+        - include: numbers
+        - include: strings
+  string_escape:
+    - match: '(\\\\|\\[tbnrf])|(\\''|\\")'
+      scope: constant.character.escape.cypher
+      captures:
+        2: string.quoted.double.cypher
+  strings:
+    - match: "'"
+      push:
+        - meta_scope: string.quoted.single.cypher
+        - match: "'"
+          pop: true
+        - include: string_escape
+    - match: '"'
+      push:
+        - meta_scope: string.quoted.double.cypher
+        - match: '"'
+          pop: true
+        - include: string_escape

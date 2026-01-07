@@ -37,3 +37,7 @@
   @apply max-w-3xl;
   @apply mx-auto;
 }
+
+@theme {
+  --text-2xs: 0.625rem;
+}

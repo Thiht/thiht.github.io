@@ -1,24 +1,29 @@
-{% extends "base.html" %}
-
-{% block title %}{{ page.title }} | {{ super() }}{% endblock title %}
-
-{% block opengraph %}
+{% extends "base.html" %} {% block title %}{{ page.title }} | {{ super() }}{%
+endblock title %} {% block opengraph %}
 <meta property="og:site_name" content="{{ config.title }}" />
 <meta property="og:title" content="{{ page.title }}" />
 <meta property="og:url" content="{{ page.permalink }}" />
 <meta property="og:description" content="{{ page.description }}" />
 <meta property="og:type" content="article" />
 <meta property="og:image" content="{{ get_url(path='images/og-image.png') }}" />
-{% endblock opengraph %}
-
-{% block content %}
-<h1 class="text-center">
-  {{ page.title }}
-</h1>
-<p class="text-center"><small>Published on <time datetime="{{ page.date }}">{{ page.date }}</time></small></p>
-<p class="text-center"><small>Reading time estimated to {{ page.reading_time }} minutes</small></p>
-
+{% endblock opengraph %} {% block content %}
 <div class="prose mx-auto py-10">
+  <h1 class="text-center text-balance">{{ page.title }}</h1>
+
+  <aside class="text-center text-sm text-gray-500">
+    <span class="text-sm">
+      <time datetime="{{ page.date }}">
+        {{ page.date | date(format="%b %d, %Y") }}
+      </time>
+    </span>
+    ·
+    <span class="text-sm"> {{ page.reading_time }} minutes </span>
+    <br />
+    {% for tag in page.taxonomies.tags %}
+    <span>#{{ tag }}</span>
+    {% endfor %}
+  </aside>
+
   {{ page.content | safe }}
 </div>
 
@@ -36,5 +41,6 @@
   data-theme="light"
   data-lang="en"
   crossorigin="anonymous"
-  async></script>
+  async
+></script>
 {% endblock content %}

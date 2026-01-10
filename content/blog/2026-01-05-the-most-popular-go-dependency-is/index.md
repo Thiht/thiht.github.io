@@ -163,7 +163,7 @@ For more interesting stats, let's write some Cypher, shall we?
 
 ### Indexing
 
-With this volume of data, the absolute first thing to do (that I clearly didn't do at first) is to create relevant indexes. I was initially under the impression that the `module_identity` constraint previously created would also act as an index for `:Module.name` since it's a composite unique index. I was wrong, and creating a specific index was necesary:
+With this volume of data, the absolute first thing to do (that I clearly didn't do at first) is to create relevant indexes. I was initially under the impression that the `module_identity` constraint previously created would also act as an index for `:Module.name` since it's a composite unique index. I was wrong, and creating a specific index was necessary:
 
 ```cypher
 CREATE INDEX module_name_idx IF NOT EXISTS

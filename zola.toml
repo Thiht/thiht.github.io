@@ -3,10 +3,9 @@ build_search_index = true
 generate_feeds = true
 title = "Thibaut Rousseau's Blog"
 author = "Thibaut Rousseau"
-taxonomies = [
-  { name = "tags", render = false }
-]
+taxonomies = [{ name = "tags", render = false }]
 
-[markdown]
-highlight_code = true
-extra_syntaxes_and_themes = ["syntaxes"]
+
+[markdown.highlighting]
+theme = "tokyo-night"
+error_on_missing_language = true

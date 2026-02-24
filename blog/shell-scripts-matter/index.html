@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shell Scripts Matter | Thibaut Rousseau&#x27;s Blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles/styles.css" />
+    <link rel="stylesheet" href="https://blog.thibaut-rousseau.com/styles/styles.css?h=4bec1dc67e544972762b" />
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml" />
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Thibaut Rousseau&#x27;s Blog" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="e9d5dca2-2e51-4c77-83d3-b88122f7a1d9"></script>
+    <meta name="fediverse:creator" content="@thiht@mastodon.social" />
+    
+<meta property="og:site_name" content="Thibaut Rousseau&#x27;s Blog" />
+<meta property="og:title" content="Shell Scripts Matter" />
+<meta property="og:url" content="https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;shell-scripts-matter&#x2F;" />
+<meta property="og:description" content="Learn how to follow good development practices, even with Bash!" />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="https://blog.thibaut-rousseau.com/images/og-image.png" />
+
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+      mermaid.initialize({
+        theme: 'neutral',
+      })
+    </script>
+  </head>
+
+  <body class="bg-stone-50">
+    <nav class="text-center px-2 py-5">
+      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">Thibaut Rousseau&#x27;s Blog</a></h1>
+    </nav>
+
+    <div class="px-5">
+<div class="prose mx-auto py-10">
+  <h1 class="text-center text-balance">Shell Scripts Matter</h1>
+
+  <aside class="text-center text-sm text-gray-500">
+    <span class="text-sm">
+      <time datetime="2017-12-03">
+        Dec 03, 2017
+      </time>
+    </span>
+    ·
+    <span class="text-sm"> 11 minutes </span>
+    <br />
+    
+    <span>#shell</span>
+    
+  </aside>
+
+  <img class="mx-auto" src="./bash-logo.png" alt="Bash logo">
+<p>The shell is an odd beast. Although it goes against every current trend in software engineering (strong typing, compile checks over runtime checks, ...), shell scripts are here to stay, and still constitute an important part of every developer's life.</p>
+<p>The weird thing about shell scripts is that even strong advocates of good practices gladly forget all they know when it comes to shell scripting.</p>
+<blockquote>
+<p>Versioning? Why bother, it's disposable code.</p>
+<p>Code quality? That's just a shell script, it's garbage anyway.</p>
+<p>Testing? Nah. There aren't any decent tools for that.</p>
+</blockquote>
+<p>Wrong, wrong, and wrong. Shell scripts have value. <strong>Everything you do for real code should be done for non trivial shell scripts</strong>, even for a one-time script. That includes versioning, code reviews, continuous integration, static code analysis, and testing.</p>
+<p>Here is a summary of everything that can, and should be done when writing shell scripts.</p>
+<p><strong>Note:</strong> This article will use Bash as a reference shell. Most of the content can be transposed to other POSIX compliant shells.</p>
+<h2 id="keep-your-scripts-in-version-control">Keep your scripts in version control</h2>
+<p>Keeping shell scripts under version control has multiple advantages:</p>
+<ul>
+<li>It constitutes a library. Shell scripts can be hard to write. If there's a reference for something difficult somewhere, your coworkers will thank you when they need it. <strong>You should setup a "shell-scripts" repository</strong> somewhere as soon as possible.</li>
+<li>They can be properly reviewed. Making mistakes is easy with shell scripts, and they can be very damaging. <strong>Code review should be mandatory for shell scripts</strong>, as for any other piece of code.</li>
+<li>They can be improved. I won't explain to you what version control is. But with shell scripts versioned, it's easy to improve them regularly.</li>
+</ul>
+<p>Please, from now on, <strong>version all your shell scripts</strong> before running them. <strong>Have someone reviewing your scripts in priority</strong> before executing them in production. It's not a waste of your coworkers' time, it's a time saver for the team.</p>
+<h2 id="improve-the-quality-of-your-scripts-with-shellcheck">Improve the quality of your scripts with ShellCheck</h2>
+<p>Although you can check the syntactic validity of your scripts with the command <code>bash -n</code>, much powerful tools exist.</p>
+<p><a rel="external" href="https://www.shellcheck.net/">ShellCheck</a> is a static code analysis tool for shell scripts. It's really an awesome tool which will help you improve your skills as you use it. <strong>So do use it</strong>. You can <a rel="external" href="https://github.com/koalaman/shellcheck#installing">install it globally on your machine</a>, use it in your <a rel="external" href="https://github.com/koalaman/shellcheck#travis-ci-setup">continuous integration</a>, and it even <a rel="external" href="https://github.com/koalaman/shellcheck#in-your-editor">integrates perfectly with most major editors</a>. There really are no downsides to using ShellCheck and it can save you from yourself.</p>
+<p>If Steam had used ShellCheck in 2015, <a rel="external" href="https://linux.slashdot.org/story/15/01/16/1429201/steam-for-linux-bug-wipes-out-all-of-a-users-files">this line would never have made it to production</a>:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #C0CAF5;">rm</span><span style="color: #E0AF68;"> -rf</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$STEAMROOT</span><span style="color: #9ECE6A;">/</span><span style="color: #89DDFF;">&quot;</span><span style="color: #F7768E;">*</span></span></code></pre>
+<p>This code violates the <a rel="external" href="https://github.com/koalaman/shellcheck/wiki/SC2115">SC2115 rule</a> from ShellCheck.</p>
+<h2 id="use-bash-unofficial-strict-mode">Use Bash unofficial strict mode</h2>
+<p>The unofficial strict mode comes from Aaron Maxwell's article "<a rel="external" href="http://redsymbol.net/articles/unofficial-bash-strict-mode/">Use the Unofficial Bash Strict Mode (Unless You Looove Debugging)</a>". He suggests to start every Bash script with the following lines:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #51597D;font-style: italic;">#!/bin/bash</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">set</span><span style="color: #E0AF68;"> -euo</span><span style="color: #9ECE6A;"> pipefail</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">IFS</span><span style="color: #89DDFF;">=$&#39;\n\t&#39;</span></span></code></pre>
+<ul>
+<li>
+<p><code>set -e</code> will exit the script if any command returns a non-zero status code. To prevent the option from triggering on commands returning a non-zero status code even when no error occurred, there are two solutions:</p>
+<ul>
+<li>
+<p>using the <code>|| true</code> pattern:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #C0CAF5;">command_returning_non_zero</span><span style="color: #89DDFF;"> ||</span><span style="color: #0DB9D7;"> true</span></span></code></pre></li>
+<li>
+<p>temporary disabling the option:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #0DB9D7;">set</span><span style="color: #9ECE6A;"> +e</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">command_returning_non_zero</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">set</span><span style="color: #E0AF68;"> -e</span></span></code></pre></li>
+</ul>
+</li>
+<li>
+<p><code>set -u</code> will prevent using an undefined variable. In the case of undefined positional parameters (<code>$1</code>, <code>$2</code>, ...), you can give them a default value with the <a rel="external" href="https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html">parameter expansion</a> construct:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #C0CAF5;">my_arg</span><span style="color: #89DDFF;">=</span><span style="color: #E0AF68;">${1</span><span style="color: #89DDFF;">:-&quot;</span><span style="color: #9ECE6A;">default</span><span style="color: #89DDFF;">&quot;</span><span style="color: #E0AF68;">}</span></span></code></pre></li>
+<li>
+<p><code>set -o pipefail</code> will force pipelines to fail on the first non-zero status code.</p>
+</li>
+<li>
+<p><code>IFS=$'\n\t'</code> makes iterations and splitting less surprising, in the case of loops mostly. The default for this variable is usually <code>IFS=$' \n\t'</code> but the space as a separator often gives confusing results.</p>
+</li>
+</ul>
+<p>Read the <a rel="external" href="http://redsymbol.net/articles/unofficial-bash-strict-mode/">original article</a> for more details and <a rel="external" href="http://redsymbol.net/articles/unofficial-bash-strict-mode/#issues-and-solutions">solutions for common challenges when using the strict mode</a>!</p>
+<p>The unofficial strict mode is more intrusive than what we've seen before and can be hard to deal with, but it's worth it in the long run. Take the time to try it.</p>
+<h2 id="do-some-cleanup">Do some cleanup!</h2>
+<p>When scripts are interrupted, either because of a user's action or because something bad occurred, most shell scripts don't clean up their mess. In the worst case, they might not restart services they had to temporarily disable. It's a shame given how easy it is to perform some cleanup and error catching with the <code>trap</code> command.</p>
+<p>Once again, in "<a rel="external" href="http://redsymbol.net/articles/bash-exit-traps/">How "Exit Traps" Can Make Your Bash Scripts Way More Robust And Reliable</a>", Aaron Maxwell gives some great advice.</p>
+<p>Always add the following in your shell scripts:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #7AA2F7;">cleanup</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    # ...</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">trap</span><span style="color: #9ECE6A;"> cleanup EXIT</span></span></code></pre>
+<p>The <code>trap</code> command will execute the <code>cleanup</code> function as soon as the script exits. In this function you could remove temporary files, restart services, or whatever is relevant to your script.</p>
+<h2 id="test-your-scripts-with-shunit2">Test your scripts with shUnit2</h2>
+<p><a rel="external" href="https://github.com/kward/shunit2">shUnit2</a> is a unit testing framework for shell scripts. It's inspired by JUnit. It's available in the standard repositories so you can install it with <code>apt-get install shunit2</code> on an Ubuntu-based distro.</p>
+<p>shUnit2 consists of a shell script you can <code>source</code> in your test file. To use it, there are multiple approaches. In order not to clutter the main script, I prefer writing the tests in a separate file. This means I'll have a <code>script.sh</code> file and a <code>test_script.sh</code> file.</p>
+<p>Below is an example for a script offering a function to add two numbers.</p>
+<p><code>add.sh</code> must have the following structure:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #7AA2F7;">add</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #9D7CD8;font-style: italic;">    local</span><span style="color: #C0CAF5;"> a</span><span style="color: #89DDFF;">=</span><span style="color: #E0AF68;">$1</span></span>
+<span class="giallo-l"><span style="color: #9D7CD8;font-style: italic;">    local</span><span style="color: #C0CAF5;"> b</span><span style="color: #89DDFF;">=</span><span style="color: #E0AF68;">$2</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">    echo</span><span style="color: #89DDFF;"> $(</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;"> a</span><span style="color: #9ECE6A;"> + b</span><span style="color: #9ABDF5;"> )</span><span style="color: #89DDFF;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">if</span><span style="color: #89DDFF;"> [[ &quot;${</span><span style="color: #C0CAF5;">BASH_SOURCE</span><span style="color: #9ABDF5;">[</span><span style="color: #9ECE6A;">0</span><span style="color: #9ABDF5;">]</span><span style="color: #89DDFF;">}&quot;</span><span style="color: #BB9AF7;"> =</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #E0AF68;">$0</span><span style="color: #89DDFF;">&quot; ]];</span><span style="color: #BB9AF7;"> then</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    # Main code of the script</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    add</span><span style="color: #E0AF68;"> $1 $2</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">fi</span></span></code></pre>
+<p>The <code>[[ "${BASH_SOURCE[0]}" = "$0" ]]</code> test is used to execute the main code only when the script is executed directly, not <code>source</code>d.</p>
+<p><code>test_add.sh</code> will look like this:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #0DB9D7;">.</span><span style="color: #9ECE6A;"> ./add.sh</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">test_add</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    actual</span><span style="color: #89DDFF;">=$(</span><span style="color: #C0CAF5;">add</span><span style="color: #FF9E64;"> 5 8</span><span style="color: #89DDFF;">)</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    expected</span><span style="color: #89DDFF;">=</span><span style="color: #9ECE6A;">13</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    assertEquals</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$expected</span><span style="color: #89DDFF;">&quot; &quot;</span><span style="color: #C0CAF5;">$actual</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">.</span><span style="color: #9ECE6A;"> shunit2</span></span></code></pre>
+<p>First, the test file <code>source</code>s the main file <code>add.sh</code> (in Bash, <code>.</code> is an alias to <code>source</code>). The functions it declares are then available in the test script.</p>
+<p>The actual tests are simple functions with a name starting by <code>test</code>. At the end, the globally installed <code>shunit2</code> is <code>source</code>d and performs its <a rel="external" href="http://ssb.stsci.edu/testing/shunit2/shunit2.html#quickstart">magic</a>.</p>
+<p>The test file can then be executed:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>$ bash test_add.sh</span></span>
+<span class="giallo-l"><span>test_add</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>Ran 1 test.</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>OK</span></span></code></pre>
+<p>The details of what shUnit2 can do are explained in <a rel="external" href="http://ssb.stsci.edu/testing/shunit2/shunit2.html#function-reference">its documentation</a>.</p>
+<p>There are alternatives to shUnit2, such as <a rel="external" href="https://github.com/sstephenson/bats">Bats</a> or <a rel="external" href="https://bmizerany.github.io/roundup/">Roundup</a> but I didn't have a chance to use them yet. Their usage should be relatively similar though. The point of this section is that <strong>testing shell scripts is doable and should be done</strong>, whatever solution you choose in the end.</p>
+<h2 id="log-what-your-script-is-doing">Log what your script is doing</h2>
+<p>In the past, I made the mistake of not logging anything. I liked running a script and seeing it work magically without anything ugly showing in the console. I was wrong, because when something doesn't work as expected, it becomes impossible to know what happened. Running a script is not supposed to feel like magic, it must be somewhat verbose and understandable. For that, please <strong>log as much as possible in your scripts</strong>.</p>
+<p>For this purpose, I usually add the following lines in my scripts:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #9D7CD8;font-style: italic;">readonly</span><span style="color: #C0CAF5;"> LOG_FILE</span><span style="color: #89DDFF;">=&quot;</span><span style="color: #9ECE6A;">/tmp/</span><span style="color: #89DDFF;">$(</span><span style="color: #C0CAF5;">basename</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #E0AF68;">$0</span><span style="color: #89DDFF;">&quot;)</span><span style="color: #9ECE6A;">.log</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">info</span><span style="color: #9ABDF5;">()    {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[INFO]    </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">warning</span><span style="color: #9ABDF5;">() {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[WARNING] </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">error</span><span style="color: #9ABDF5;">()   {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[ERROR]   </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">fatal</span><span style="color: #9ABDF5;">()   {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[FATAL]   </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #0DB9D7;"> exit</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;"> ;</span><span style="color: #9ABDF5;"> }</span></span></code></pre>
+<p>This tiny logging framework allows to easily keep track of whatever happens during the script execution. Logging becomes as simple as writing <code>info "Executing this and that..."</code>. Then it's easy to <code>grep</code> on the log file to find something specific. Feel free to improve these functions as you need, with the date, the calling function name (with <code>$FUNCNAME</code>), etc.</p>
+<p>I don't use the builtin <a rel="external" href="http://man7.org/linux/man-pages/man1/logger.1.html"><code>logger</code></a> because it requires special privileges to write to <code>/var/log</code> and I'm not fond of its usage. Writing to a log file in <code>/tmp</code> is usually good enough. For <code>cron</code> scripts though you should probably investigate <code>logger</code>.</p>
+<p>Use the <code>-v</code> or <code>--verbose</code> of the commands you invoke as needed to improve the quality of your logging.</p>
+<h2 id="learn-to-debug-your-scripts">Learn to debug your scripts</h2>
+<p>The easiest way to debug a shell script, besides logging, is to run it with <code>bash -x</code>. Another way is to use <code>set -x</code> inside the script. This option will make Bash print every command before its execution, replacing the variables with their real values. Used together with the unofficial strict mode, this method is useful to see what's going on in a script with less risk to break the environment.</p>
+<p>It's also worth knowing that a few debuggers for Bash exist, for example <a rel="external" href="http://bashdb.sourceforge.net/bashdb.html">bashdb</a>. bashdb works in the same way as gdb, and can be used to add breakpoints, switching to step by step execution, showing the value of variables, etc. You can learn how to use bashdb with the video "<a rel="external" href="https://www.youtube.com/watch?v=jbOQJDSTksA">Using BashDB to Debug Your Shell Scripts </a>":</p>
+<div>
+  <iframe
+    class="block m-auto w-full max-w-xl aspect-video border-none"
+    src="https://www.youtube.com/embed/jbOQJDSTksA"
+    allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>
+  </iframe>
+</div>
+<h2 id="document-your-scripts">Document your scripts</h2>
+<p>Any shell script should have a <code>--help</code> option. This doesn't seem easy? It is, thanks to the following wizardry:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #51597D;font-style: italic;">#/ Usage: add &lt;first number&gt; &lt;second number&gt;</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">#/ Compute the sum of two numbers</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">usage</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    grep</span><span style="color: #89DDFF;"> &#39;</span><span style="color: #9ECE6A;">^#/</span><span style="color: #89DDFF;">&#39; &quot;</span><span style="color: #E0AF68;">$0</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> cut</span><span style="color: #E0AF68;"> -c4-</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">    exit</span><span style="color: #FF9E64;"> 0</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">expr</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;"> :</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">.*--help</span><span style="color: #89DDFF;">&quot; &gt;</span><span style="color: #9ECE6A;"> /dev/null</span><span style="color: #89DDFF;"> &amp;&amp;</span><span style="color: #C0CAF5;"> usage</span></span></code></pre>
+<p>The <code>usage</code> function will print every line starting with <code>#/</code> comments, without this prefix.</p>
+<p>The <code>expr</code> command will check if the string resulting of the concatenation of all the parameters contains <code>--help</code>. If so, it will call <code>usage</code>.</p>
+<p>This is definitely not the cleanest way to parse parameters, but this quick method ensures you will add a <code>--help</code> flag.</p>
+<p>For the sake of good practices, <a rel="external" href="https://stackoverflow.com/a/14203146/1544176">this StackOverflow post</a> explains how to properly parse a script's parameters using the <code>while</code>/<code>case</code>/<code>shift</code> construct.</p>
+<p>To generate HTML documentation from your comments, you can also check <a rel="external" href="http://rtomayko.github.io/shocco/">shocco.sh</a>, which inspired <a rel="external" href="https://github.com/rtomayko/shocco/blob/e4660e563559d5bd9acbca42b61115e72b54667f/shocco.sh#L54-L57">the above trick</a>.</p>
+<h2 id="random-advice">Random advice</h2>
+<p>The following is a list of random good practices I've learned the hard way. I'll explain the rationale behind every advice as I go.</p>
+<h3 id="use-bash-for-scripting">Use Bash for scripting</h3>
+<p>Use Bash by default, Sh if you have to. Try to forget about Ksh, Zsh or Fish unless there are really good reasons to use them. This choice not only ensures your script will work virtually everywhere, but also fosters comprehension of a script by the whole team. You don't write production scripts for yourself.</p>
+<h3 id="use-bashisms">Use Bashisms</h3>
+<p>If you use Bash, don't half-use it. Use <a rel="external" href="https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html">parameter expansion</a>. Use <a rel="external" href="http://tldp.org/LDP/abs/html/localvar.html">local</a> and <a rel="external" href="https://ss64.com/bash/readonly.html">readonly</a> variables. Use <a rel="external" href="https://www.gnu.org/software/bash/manual/html_node/Bash-Conditional-Expressions.html">improved conditional expressions</a>.</p>
+<h3 id="quote-your-variables">Quote your variables</h3>
+<p>Even if you know quoting is not required, it's a good habit to always quote variables. The only exception is when you specifically want expansion to occur. More on <a rel="external" href="https://github.com/koalaman/shellcheck/wiki/SC2086">word splitting</a>.</p>
+<h3 id="name-your-parameters">Name your parameters</h3>
+<p>This goes without saying, but explicitly naming parameters (<code>$1</code>, <code>$2</code>, ...) makes the code self-documenting and helps readability. The parameter expansion of Bash is a great candidate for naming and assigning default values to positional parameters:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #C0CAF5;">my_arg</span><span style="color: #89DDFF;">=</span><span style="color: #E0AF68;">${1</span><span style="color: #89DDFF;">:-</span><span style="color: #C0CAF5;">default</span><span style="color: #E0AF68;">}</span></span></code></pre><h3 id="use-subshells-as-a-way-to-control-what-s-in-your-global-scope">Use subshells as a way to control what's in your global scope</h3>
+<p>An example is worth a thousand words:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #C0CAF5;">var</span><span style="color: #89DDFF;">=</span><span style="color: #9ECE6A;">1</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">echo</span><span style="color: #C0CAF5;"> $var</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">(</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">    echo</span><span style="color: #C0CAF5;"> $var</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    var</span><span style="color: #89DDFF;">=</span><span style="color: #9ECE6A;">5</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">    echo</span><span style="color: #C0CAF5;"> $var</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">echo</span><span style="color: #C0CAF5;"> $var</span></span></code></pre>
+<p>will print:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>1</span></span>
+<span class="giallo-l"><span>1</span></span>
+<span class="giallo-l"><span>5</span></span>
+<span class="giallo-l"><span>1</span></span></code></pre>
+<p>My main usage for this is when I need to temporarily modify <code>$IFS</code> (for iterating over simple CSV-like files for example) and reset it to its original value afterwards.</p>
+<h3 id="use-a-template">Use a template</h3>
+<p>This script template summarizes every snippets shared along this article. I believe it's a good basis for any kind of script.</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #51597D;font-style: italic;">#!/usr/bin/env bash</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">set</span><span style="color: #E0AF68;"> -euo</span><span style="color: #9ECE6A;"> pipefail</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">IFS</span><span style="color: #89DDFF;">=$&#39;\n\t&#39;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">#/ Usage:</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">#/ Description:</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">#/ Examples:</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">#/ Options:</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">#/   --help: Display this help message</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">usage</span><span style="color: #9ABDF5;">() {</span><span style="color: #C0CAF5;"> grep</span><span style="color: #89DDFF;"> &#39;</span><span style="color: #9ECE6A;">^#/</span><span style="color: #89DDFF;">&#39; &quot;</span><span style="color: #E0AF68;">$0</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> cut</span><span style="color: #E0AF68;"> -c4-</span><span style="color: #89DDFF;"> ;</span><span style="color: #0DB9D7;"> exit</span><span style="color: #FF9E64;"> 0</span><span style="color: #89DDFF;"> ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">expr</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;"> :</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">.*--help</span><span style="color: #89DDFF;">&quot; &gt;</span><span style="color: #9ECE6A;"> /dev/null</span><span style="color: #89DDFF;"> &amp;&amp;</span><span style="color: #C0CAF5;"> usage</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #9D7CD8;font-style: italic;">readonly</span><span style="color: #C0CAF5;"> LOG_FILE</span><span style="color: #89DDFF;">=&quot;</span><span style="color: #9ECE6A;">/tmp/</span><span style="color: #89DDFF;">$(</span><span style="color: #C0CAF5;">basename</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #E0AF68;">$0</span><span style="color: #89DDFF;">&quot;)</span><span style="color: #9ECE6A;">.log</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">info</span><span style="color: #9ABDF5;">()    {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[INFO]    </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">warning</span><span style="color: #9ABDF5;">() {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[WARNING] </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">error</span><span style="color: #9ABDF5;">()   {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[ERROR]   </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">fatal</span><span style="color: #9ABDF5;">()   {</span><span style="color: #0DB9D7;"> echo</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">[FATAL]   </span><span style="color: #F7768E;">$*</span><span style="color: #89DDFF;">&quot; |</span><span style="color: #C0CAF5;"> tee</span><span style="color: #E0AF68;"> -a</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #C0CAF5;">$LOG_FILE</span><span style="color: #89DDFF;">&quot; &gt;&amp;2 ;</span><span style="color: #0DB9D7;"> exit</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;"> ;</span><span style="color: #9ABDF5;"> }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">cleanup</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    # Remove temporary files</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    # Restart services</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    # ...</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">if</span><span style="color: #89DDFF;"> [[ &quot;${</span><span style="color: #C0CAF5;">BASH_SOURCE</span><span style="color: #9ABDF5;">[</span><span style="color: #9ECE6A;">0</span><span style="color: #9ABDF5;">]</span><span style="color: #89DDFF;">}&quot;</span><span style="color: #BB9AF7;"> =</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #E0AF68;">$0</span><span style="color: #89DDFF;">&quot; ]];</span><span style="color: #BB9AF7;"> then</span></span>
+<span class="giallo-l"><span style="color: #0DB9D7;">    trap</span><span style="color: #9ECE6A;"> cleanup EXIT</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    # Script goes here</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    # ...</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">fi</span></span></code></pre><h3 id="stay-informed">Stay informed</h3>
+<p>Shell scripting isn't moving that much these days. It's a great reason to read stuff about the topic, it makes it easy to keep up! Here are some interesting resources:</p>
+<ul>
+<li><code>man bash</code>, I bet almost none of you have read it, yet it's a great source of information! And it's not that hard to read, I promise.</li>
+<li><a rel="external" href="https://twitter.com/UnixToolTip">@UnixTooltip</a> on Twitter, continuously gives tips and tricks.</li>
+<li><a rel="external" href="https://stackoverflow.com/questions/tagged/bash?sort=votes&amp;pageSize=15">Most upvoted Bash questions on StackOverflow</a></li>
+<li><a rel="external" href="https://stackoverflow.com/documentation/bash/topics">Bash participative documentation on StackOverflow</a> has some interesting examples.</li>
+<li><a rel="external" href="https://github.com/koalaman/shellcheck/wiki">ShellCheck's wiki</a> is a good resource to learn what not to do, and why.</li>
+<li><a rel="external" href="https://news.ycombinator.com/news">Hacker News</a> and <a rel="external" href="https://www.reddit.com/r/programming/">/r/programming</a>, once in a while articles on this subject pop out.</li>
+</ul>
+<hr />
+<p>I hope this article brought light on what was possible with shell scripting. The tools are there. You know the practices. Now it's up to you to make scripting a delight to work with, for you and your team!</p>
+
+</div>
+
+<script
+  src="https://giscus.app/client.js"
+  data-repo="thiht/thiht.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnk0NzI5MDY0MA=="
+  data-category="Comments"
+  data-category-id="DIC_kwDOAtGZEM4CmJ2J"
+  data-mapping="og:title"
+  data-strict="1"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-input-position="top"
+  data-theme="noborder_light"
+  data-lang="en"
+  crossorigin="anonymous"
+  async
+></script>
+</div>
+
+    <footer class="text-center px-2 py-5">
+      <p>&copy; 2026 Thibaut Rousseau</p>
+      <p>
+        <a href="/atom.xml" title="Subscribe to my feed">
+          <img src="/icons/rss-color.svg" alt="RSS" class="inline-block" width="24" height="24" />
+        </a>
+        <a href="https://github.com/Thiht" title="Follow me on GitHub">
+          <img src="/icons/github-color.svg" alt="GitHub" class="inline-block" width="24" height="24" />
+        </a>
+        <a rel="me" href="https://mastodon.social/@thiht" title="Follow me on Mastodon">
+          <img src="/icons/mastodon-color.svg" alt="Mastodon" class="inline-block" width="24" height="24" />
+        <a
+          href="bitcoin:bc1qawxn5u2rqupvp043rwamn67d383ggd2tc2tfr3?amount=0.000015"
+          title="Donate some Bitcoin"
+        >
+          <img src="/icons/bitcoin-color.svg" alt="Bitcoin" class="inline-block" width="24" height="24" />
+        </a>
+      </p>
+    </footer>
+  </body>
+</html>

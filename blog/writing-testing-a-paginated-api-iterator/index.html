@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Writing &amp; Testing a Paginated API Iterator in Go | Thibaut Rousseau&#x27;s Blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles/styles.css" />
+    <link rel="stylesheet" href="https://blog.thibaut-rousseau.com/styles/styles.css?h=4bec1dc67e544972762b" />
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml" />
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Thibaut Rousseau&#x27;s Blog" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="e9d5dca2-2e51-4c77-83d3-b88122f7a1d9"></script>
+    <meta name="fediverse:creator" content="@thiht@mastodon.social" />
+    
+<meta property="og:site_name" content="Thibaut Rousseau&#x27;s Blog" />
+<meta property="og:title" content="Writing &amp; Testing a Paginated API Iterator in Go" />
+<meta property="og:url" content="https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;writing-testing-a-paginated-api-iterator&#x2F;" />
+<meta property="og:description" content="Writing and unit-testing Go 1.23 iterators can be tricky. This article shows a full-featured example using GitHub&#x27;s public API." />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="https://blog.thibaut-rousseau.com/images/og-image.png" />
+
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+      mermaid.initialize({
+        theme: 'neutral',
+      })
+    </script>
+  </head>
+
+  <body class="bg-stone-50">
+    <nav class="text-center px-2 py-5">
+      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">Thibaut Rousseau&#x27;s Blog</a></h1>
+    </nav>
+
+    <div class="px-5">
+<div class="prose mx-auto py-10">
+  <h1 class="text-center text-balance">Writing &amp; Testing a Paginated API Iterator in Go</h1>
+
+  <aside class="text-center text-sm text-gray-500">
+    <span class="text-sm">
+      <time datetime="2024-12-19">
+        Dec 19, 2024
+      </time>
+    </span>
+    ·
+    <span class="text-sm"> 8 minutes </span>
+    <br />
+    
+    <span>#go</span>
+    
+    <span>#testing</span>
+    
+  </aside>
+
+  <p><strong>Go 1.23</strong>, amongst <a rel="external" href="https://tip.golang.org/doc/go1.23">other features</a>, brought <a rel="external" href="https://pkg.go.dev/iter">Iterators</a> to the standard library.</p>
+<p>Iterators are basically a way to make the <code>range</code> operator work on functions implementing a specific interface. This lets you write code like this:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">for</span><span style="color: #C0CAF5;"> value</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #7AA2F7;"> myIterator</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">  // ...</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>The main difference with using <code>range</code> over a slice or a map is that an iterator can fetch data lazily. I doesn’t need to fetch all the data at once before writing the loop. This comes really handy for consuming paginated APIs: we can write an iterator abstracting the pagination logic, making the code more readable and reusable.</p>
+<p>In this article I’ll show you how to <strong>write a custom iterator</strong> for consuming a paginated HTTP API (we’ll use GitHub’s API as an example), and how to <strong>test it</strong> properly by leveraging <a rel="external" href="https://pkg.go.dev/iter#hdr-Pulling_Values">Pull Iterators</a>.</p>
+<hr />
+<p>Note that this article will not discuss the design of iterators in Go, we’ll just see how to use and work with them. For more information on iterators, I recommend these articles:</p>
+<ul>
+<li><a rel="external" href="https://eli.thegreenplace.net/2024/ranging-over-functions-in-go-123/">Ranging over functions in Go 1.23</a></li>
+<li><a rel="external" href="https://go.dev/blog/range-functions">Range Over Function Types</a></li>
+</ul>
+<h2 id="writing-an-iterator">Writing an Iterator</h2>
+<p>Iterators can return up to two values. They must implement one of these signatures:</p>
+<ul>
+<li><a rel="external" href="https://pkg.go.dev/iter#Seq"><code>iter.Seq</code></a> (<code>func(yield func(V) bool</code>): iterators over sequences of 1 value</li>
+<li><a rel="external" href="https://pkg.go.dev/iter#Seq2"><code>iter.Seq2</code></a> (<code>func(yield func(K, V) bool</code>): iterators over sequences of 2 values</li>
+<li><code>func(yield func() bool)</code>: iterators over sequence of… no value :)</li>
+</ul>
+<p>For iterators working over remote resources like APIs, the emerging idiom is to use the second value for error handling. In practice, using our iterator will look like this:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #51597D;font-style: italic;">// IterateResources is a function returning an iter.Seq2[K, error]</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">for</span><span style="color: #C0CAF5;"> resource</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #7AA2F7;"> IterateResources</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> apiClient</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">        // handle error</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">        break</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    // use resource</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>I noticed a few naming conventions for functions returning an iterator:</p>
+<ul>
+<li><code>IterateResources</code></li>
+<li><code>IterResources</code></li>
+<li><code>ResourcesSeq</code></li>
+</ul>
+<p>I’m not sure yet which is the more common, but I went with <code>Iterate</code> in this article as it feels clearer.</p>
+<hr />
+<p>We’ll implement an iterator looking like the above using the <a rel="external" href="https://docs.github.com/fr/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-a-user">GitHub API to list the repositories of a user</a>.</p>
+<p>I chose this API for 3 reasons:</p>
+<ol>
+<li>it's public and doesn't require authentication. You can give it a try in a terminal:<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #C0CAF5;">curl</span><span style="color: #89DDFF;"> &#39;</span><span style="color: #9ECE6A;">https://api.github.com/users/thiht/repos?page=1&amp;per_page=5</span><span style="color: #89DDFF;">&#39;</span></span></code></pre></li>
+<li>it's paginated, so it's a good use-case for an iterator,</li>
+<li>the Go module <a rel="external" href="https://pkg.go.dev/github.com/google/go-github/v67@v67.0.0">google/go-github</a> is readily available to interact with the GitHub API.</li>
+</ol>
+<p>With <a rel="external" href="https://pkg.go.dev/github.com/google/go-github/v67@v67.0.0">google/go-github</a>, we’ll use the <a rel="external" href="https://pkg.go.dev/github.com/google/go-github/v67@v67.0.0/github#RepositoriesService.ListByUser">RepositoriesService.ListByUser</a> method. As a starting point, let’s write a version of the code listing all <a rel="external" href="https://github.com/Thiht?tab=repositories">my repositories</a>, without an iterator.</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">package</span><span style="color: #C0CAF5;"> main</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">import</span><span style="color: #89DDFF;"> (</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">github.com/google/go-github/v67/github</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> main</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  ctx</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  client</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">NewClient</span><span style="color: #9ABDF5;">(</span><span style="color: #FF9E64;">nil</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  user</span><span style="color: #89DDFF;"> := &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  opts</span><span style="color: #89DDFF;"> := &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">RepositoryListByUserOptions</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">    ListOptions</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">ListOptions</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      Page</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;">    1</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      PerPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 5</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  for</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    repos</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> resp</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repositories</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">ListByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> user</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> opts</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">      panic</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    for</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> repo</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #C0CAF5;"> repos</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">      println</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">repo</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">FullName</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> resp</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">NextPage</span><span style="color: #BB9AF7;"> ==</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      break</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Page</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> resp</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">NextPage</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>The pagination parameters are passed via <code>ListOptions</code>, and the next page to fetch is retrieved at each loop from the <code>resp</code> result. I set the pagination settings to list the repositories 5 by 5 so that we get a chance to see the pagination in action.</p>
+<p>This code works fine, but it forces us to mix the pagination logic (checking the <code>NextPage</code> value and updating <code>opts.Page</code>) with our business logic (printing the repository name). It also suffers from a lack of standardization: any API you use will be different. Not only REST APIs, but also filesystem APIs, custom collections, or whatever. Iterators will help us abstract anything related to the pagination and focus on our own logic.</p>
+<p>Let’s now rewrite the same code with an iterator:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">package</span><span style="color: #C0CAF5;"> main</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">import</span><span style="color: #89DDFF;"> (</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">iter</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">github.com/google/go-github/v67/github</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">// 1. Iterator usage</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> main</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  ctx</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  client</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">NewClient</span><span style="color: #9ABDF5;">(</span><span style="color: #FF9E64;">nil</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  user</span><span style="color: #89DDFF;"> := &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  for</span><span style="color: #C0CAF5;"> repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #7AA2F7;"> IterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repositories</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> user</span><span style="color: #89DDFF;">,</span><span style="color: #FF9E64;"> nil</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  ) {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">      panic</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">    println</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">repo</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">FullName</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">// 2. Iterator implementation</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> IterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> client</span><span style="color: #C0CAF5;"> RepositoryLister</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> user</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  opts</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">RepositoryListByUserOptions</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">)</span><span style="color: #C0CAF5;"> iter</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Seq2</span><span style="color: #9ABDF5;">[</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">] {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">yield</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> bool</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    // 2.1. Initialization</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> opts</span><span style="color: #BB9AF7;"> ==</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">      opts</span><span style="color: #89DDFF;"> = &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">RepositoryListByUserOptions</span><span style="color: #9ABDF5;">{}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Page</span><span style="color: #BB9AF7;"> ==</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">      opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Page</span><span style="color: #89DDFF;"> =</span><span style="color: #FF9E64;"> 1</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">PerPage</span><span style="color: #BB9AF7;"> ==</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">      opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">PerPage</span><span style="color: #89DDFF;"> =</span><span style="color: #FF9E64;"> 5</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    // 2.2. Pagination loop</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    for</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">      repos</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> response</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">ListByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> user</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> opts</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">        yield</span><span style="color: #9ABDF5;">(</span><span style="color: #FF9E64;">nil</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">        return</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">      }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      for</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> repo</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #C0CAF5;"> repos</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">        if !</span><span style="color: #7AA2F7;">yield</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">repo</span><span style="color: #89DDFF;">,</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">          return</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">        }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">      }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      if</span><span style="color: #C0CAF5;"> response</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">NextPage</span><span style="color: #BB9AF7;"> ==</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">        return</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">      }</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">      opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Page</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> response</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">NextPage</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> RepositoryLister</span><span style="color: #BB9AF7;"> interface</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">  ListByUser</span><span style="color: #9ABDF5;">(</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">    ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> user</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">    opts</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">RepositoryListByUserOptions</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  ) ([]</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #89DDFF;">, *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>As you can see, the iterator version is slightly more verbose, but it's more reusable and has the benefit of isolating the pagination logic from the rest of the code. Keep in mind in real life projects you’ll modify the business logic of the loop more often than you’ll modify the iterator itself, so it makes sense to take a bit of time writing an iterator to get simpler business code.</p>
+<p><code>IterateRepositoriesByUser</code> is not an iterator itself, but a function returning an iterator. This lets us pass the parameters that will be available in the scope of the iterator: the context, the GitHub client, the target user, and the additional options.</p>
+<p>I declared a <code>RepositoryLister</code> interface to make it easier to test the iterator, we’ll come back to it in the next part.</p>
+<p>The iterator consists of these steps:</p>
+<ul>
+<li><strong>2.1:</strong> Initialization of the pagination params before calling the API: the pagination starts at page 1 on the GitHub API,</li>
+<li><strong>2.2:</strong> Main loop listing the user’s repositories. Note that this is roughly the same code we had in the implementation without iterator: the pagination logic stays the same. The main difference is the use of <code>yield</code> to return our values and errors to <code>range</code>:
+<ul>
+<li>If <code>ListByUser</code> fails, yield the error and return: I decided to return unconditionally in case of failure, because I want the <code>range</code> to end if <code>ListByUser</code> fails.</li>
+<li>If <code>ListByUser</code> succeeds, the repositories are yielded one by one.</li>
+</ul>
+</li>
+</ul>
+<p>As a reminder:</p>
+<ul>
+<li><code>yield</code> returns <code>true</code> if the <code>range</code> loop continues (if the <code>continue</code> keyword is used, or if the loop continues to the next iteration),</li>
+<li><code>yield</code> returns <code>false</code> if the <code>range</code> loop stops (if <code>break</code> or <code>return</code> are used, or if the loop is interrupted).</li>
+</ul>
+<h2 id="testing-the-iterator">Testing the Iterator</h2>
+<p>It can be a bit challenging to write tests for an iterator. In our tests we need to make sure that:</p>
+<ul>
+<li>the iterator contains the elements we expect, in the correct order,</li>
+<li>the iterator doesn’t contain <strong>more</strong> elements than we expect.</li>
+</ul>
+<h3 id="mocking-repositorylister">Mocking <code>RepositoryLister</code></h3>
+<p>Using a mock is not the only way to write this test, just my personal preference. As <code>github.NewClient</code> accepts an <code>*http.Client</code> as a parameter, we could instead use <a rel="external" href="https://pkg.go.dev/net/http/httptest"><code>net/http/httptest</code></a> to control the HTTP calls and their responses.</p>
+<p>In the above example, we used an interface <code>RepositoryLister</code> to abstract the GitHub API client. Thanks to this abstraction, we can mock the GitHub API client in our tests. We could use a mocking library like <a rel="external" href="https://vektra.github.io/mockery/latest/">mockery</a> to generate a mock for this interface automatically, but I'll write it manually for this example:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #7DCFFF;">import</span><span style="color: #89DDFF;"> (</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">fmt</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">github.com/google/go-github/v67/github</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> repositoryListerMock</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  t</span><span style="color: #89DDFF;">     *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  calls</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">callListByUser</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> callListByUser</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  expectPage</span><span style="color: #BB9AF7;"> int</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  repos</span><span style="color: #9ABDF5;">      []</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  resp</span><span style="color: #89DDFF;">       *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  err</span><span style="color: #BB9AF7;">        error</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> newRepositoryListerMock</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">t</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> calls</span><span style="color: #89DDFF;"> ...</span><span style="color: #C0CAF5;">callListByUser</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">repositoryListerMock</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  mock</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> repositoryListerMock</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">t</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> t</span><span style="color: #89DDFF;">,</span><span style="color: #7DCFFF;"> calls</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> calls</span><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Cleanup</span><span style="color: #9ABDF5;">(</span><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #7AA2F7;"> len</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">mock</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> &gt;</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">      t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatalf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #C0CAF5;">%d</span><span style="color: #9ECE6A;"> unfulfilled calls to ListByUser</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #7AA2F7;"> len</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">mock</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #9ABDF5;">))</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  })</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #89DDFF;"> &amp;</span><span style="color: #C0CAF5;">mock</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">r </span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">repositoryListerMock</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> ListByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> user</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> opts</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">RepositoryListByUserOptions</span><span style="color: #9ABDF5;">) ([]</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #89DDFF;">, *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Helper</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #7AA2F7;"> len</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> ==</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">no result registered for ListByUser</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Page</span><span style="color: #BB9AF7;"> !=</span><span style="color: #C0CAF5;"> r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #9ABDF5;">[</span><span style="color: #FF9E64;">0</span><span style="color: #9ABDF5;">]</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">expectPage</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatalf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected page: got </span><span style="color: #C0CAF5;">%d</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%d</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> opts</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Page</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #9ABDF5;">[</span><span style="color: #FF9E64;">0</span><span style="color: #9ABDF5;">]</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">expectPage</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  result</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #9ABDF5;">[</span><span style="color: #FF9E64;">0</span><span style="color: #9ABDF5;">]</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> r</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">calls</span><span style="color: #9ABDF5;">[</span><span style="color: #FF9E64;">1</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;">]</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #C0CAF5;"> result</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repos</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> result</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">resp</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> result</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>This mock lets you register the expected calls to <code>ListByUser</code> and the results you want to return.
+It can be used as follows, in place of a <code>RepositoryLister</code>:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> Test_repositoryListerMock</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">t</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  mockClient</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> newRepositoryListerMock</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">t</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    callListByUser</span><span style="color: #9ABDF5;">{</span><span style="color: #51597D;font-style: italic;"> // First call</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      repos</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">        {</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">      }</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      resp</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">NextPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 2</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    callListByUser</span><span style="color: #9ABDF5;">{</span><span style="color: #51597D;font-style: italic;"> // Second call</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 2</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      err</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;">        fmt</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">an error occurred</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  )</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  repos</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> resp</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> mockClient</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">ListByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;, &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">RepositoryListByUserOptions</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">    ListOptions</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">ListOptions</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">Page</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 1</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  })</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected error </span><span style="color: #C0CAF5;">%v</span><span style="color: #9ECE6A;">:</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #7AA2F7;"> len</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">repos</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> 1</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected number of repositories: got </span><span style="color: #C0CAF5;">%d</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%d</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #7AA2F7;"> len</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">repos</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;">,</span><span style="color: #FF9E64;"> 1</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">repos</span><span style="color: #9ABDF5;">[</span><span style="color: #FF9E64;">0</span><span style="color: #9ABDF5;">]</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">FullName</span><span style="color: #BB9AF7;"> !=</span><span style="color: #89DDFF;"> &quot;</span><span style="color: #9ECE6A;">example</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected repository name: got </span><span style="color: #C0CAF5;">%q</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%q</span><span style="color: #89DDFF;">&quot;, *</span><span style="color: #C0CAF5;">repos</span><span style="color: #9ABDF5;">[</span><span style="color: #FF9E64;">0</span><span style="color: #9ABDF5;">]</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">FullName</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">example</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> resp</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">NextPage</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> 2</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected next page: got </span><span style="color: #C0CAF5;">%d</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%d</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> resp</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">NextPage</span><span style="color: #89DDFF;">,</span><span style="color: #FF9E64;"> 2</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> mockClient</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">ListByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;, &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">RepositoryListByUserOptions</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">    ListOptions</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">ListOptions</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">Page</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 2</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  })</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> ==</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">expected error, got nil</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">  // An additional call to ListByUser will fail because there are no more results</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">  // mockClient.ListByUser(context.Background(), &quot;thiht&quot;, nil)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre><h3 id="writing-tests-for-the-sequence">Writing tests for the sequence</h3>
+<p>To test an iterator, I find it easier to first write down the expected sequence of values it returns. To do so, we can start by defining a type to represent the 2 values returned by an iteration:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">  type</span><span style="color: #C0CAF5;"> iteration</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">    repo</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">    err</span><span style="color: #BB9AF7;">  error</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span></code></pre>
+<p>This way we’ll be able to declare an expected sequence for a test:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #C0CAF5;">expectedIterations</span><span style="color: #89DDFF;"> :=</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">iteration</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  {</span><span style="color: #7DCFFF;">repo</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example1</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  {</span><span style="color: #7DCFFF;">repo</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example2</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>Before writing our test, let’s setup our GitHub client mock with the expected responses to match this expected sequence:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #C0CAF5;">client</span><span style="color: #89DDFF;"> := &amp;</span><span style="color: #C0CAF5;">repositoryListerMock</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  t</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> t</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  calls</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">callListByUser</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      repos</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">        {</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example1</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">        {</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example2</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">      }</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">      resp</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">NextPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>Our <code>repositoryListerMock</code> implements ListByUser, will return 2 repositories on the first page, and signal there’s no next page to fetch.</p>
+<p>With all of this setup, we can finally test the iterator itself. The first trick here is to convert our iterator to a <strong>pull iterator</strong> to get finer control over the iteration sequence:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #51597D;font-style: italic;">// 1. Initialize the iterator</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">next</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> stop</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> iter</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Pull2</span><span style="color: #9ABDF5;">(</span><span style="color: #7AA2F7;">IterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;">))</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Cleanup</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">stop</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">// 2. Iterate and compare to the expected sequence</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">for</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #C0CAF5;"> expectedIterations</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if !</span><span style="color: #C0CAF5;">ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected end of iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if !</span><span style="color: #C0CAF5;">reflect</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">DeepEqual</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected repository: got </span><span style="color: #C0CAF5;">%+v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%+v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected error: got </span><span style="color: #C0CAF5;">%v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">// 3. Ensure the iterator is empty</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">if</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>The actual testing consists of 3 parts:</p>
+<ol>
+<li>First, the iterator is initialized by calling <code>IterateRepositoriesByUser</code> with its expected parameters, including the mock client we created previously. We call <a rel="external" href="https://pkg.go.dev/iter#Pull2"><code>iter.Pull2</code></a> to convert the iterator to a push iterator, which gives us 2 new variables: <code>next</code> and <code>stop</code>. <code>next</code> will give us the next values in the iterator, and a boolean indicating whether it still contained values.</li>
+<li>Then, we loop on the <code>expectedIterations</code>. That’s the second trick, we don’t loop directly on the iterator but instead on the sequence we expect. This lets us check all the values we expect one by one.
+<ul>
+<li>The first action in the loop is to call <code>next</code> to iterate. If the <code>ok</code> value returned by the iterator is <code>false</code> it means we expected more values than the iterator gave us, so the test fails.</li>
+<li>Then, we can simply check that the returned <code>*github.Repository</code> and <code>error</code> are the ones we expected.</li>
+</ul>
+</li>
+<li>Finally we need to call <code>next</code> one last time to ensure the iterator is empty. If the <code>ok</code> value is <code>true</code>, it means the iterator contains more values than we expected. The test fails, and we need to rework our <code>expectedSequence</code>.</li>
+</ol>
+<p>This approach makes it easy to test all the possible cases for this iterator. The below examples show how to write a few additional tests, such as an iterator calling multiple pages of results, or an iterator returning an unexpected error.</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> TestIterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">t</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">	type</span><span style="color: #C0CAF5;"> iteration</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">		repo</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">		err</span><span style="color: #BB9AF7;">  error</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">	}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">	t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Run</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">1 page of repositories</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">t</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		client</span><span style="color: #89DDFF;"> := &amp;</span><span style="color: #C0CAF5;">repositoryListerMock</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			t</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> t</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			calls</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">callListByUser</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					repos</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">						{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example1</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">						{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example2</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">					}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					resp</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">NextPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		expectedIterations</span><span style="color: #89DDFF;"> :=</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">iteration</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			{</span><span style="color: #7DCFFF;">repo</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example1</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			{</span><span style="color: #7DCFFF;">repo</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example2</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		next</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> stop</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> iter</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Pull2</span><span style="color: #9ABDF5;">(</span><span style="color: #7AA2F7;">IterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;">))</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Cleanup</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">stop</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		for</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #C0CAF5;"> expectedIterations</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">			repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if !</span><span style="color: #C0CAF5;">ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected end of iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if !</span><span style="color: #C0CAF5;">reflect</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">DeepEqual</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected repository: got </span><span style="color: #C0CAF5;">%+v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%+v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected error: got </span><span style="color: #C0CAF5;">%v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		if</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">			t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">	})</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">	t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Run</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">2 pages of repositories</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">t</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		client</span><span style="color: #89DDFF;"> := &amp;</span><span style="color: #C0CAF5;">repositoryListerMock</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			t</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> t</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			calls</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">callListByUser</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					repos</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">						{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example1</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">					}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					resp</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">NextPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 2</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 2</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					repos</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">						{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example2</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">					}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					resp</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">NextPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		expectedIterations</span><span style="color: #89DDFF;"> :=</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">iteration</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			{</span><span style="color: #7DCFFF;">repo</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example1</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			{</span><span style="color: #7DCFFF;">repo</span><span style="color: #89DDFF;">: &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">FullName</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> github</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">String</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">example2</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)}}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		next</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> stop</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> iter</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Pull2</span><span style="color: #9ABDF5;">(</span><span style="color: #7AA2F7;">IterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;">))</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Cleanup</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">stop</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		for</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #C0CAF5;"> expectedIterations</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">			repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if !</span><span style="color: #C0CAF5;">ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected end of iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if !</span><span style="color: #C0CAF5;">reflect</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">DeepEqual</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected repository: got </span><span style="color: #C0CAF5;">%+v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%+v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected error: got </span><span style="color: #C0CAF5;">%v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		if</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">			t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">	})</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">	t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Run</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">api error</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">t</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		clientErr</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> fmt</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">an error occurred</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		client</span><span style="color: #89DDFF;"> := &amp;</span><span style="color: #C0CAF5;">repositoryListerMock</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			t</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> t</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			calls</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">callListByUser</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					err</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;">        clientErr</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		expectedIterations</span><span style="color: #89DDFF;"> :=</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">iteration</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			{</span><span style="color: #7DCFFF;">err</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> clientErr</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		next</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> stop</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> iter</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Pull2</span><span style="color: #9ABDF5;">(</span><span style="color: #7AA2F7;">IterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;">))</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Cleanup</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">stop</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		for</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;"> :=</span><span style="color: #BB9AF7;"> range</span><span style="color: #C0CAF5;"> expectedIterations</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">			repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if !</span><span style="color: #C0CAF5;">ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected end of iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if !</span><span style="color: #C0CAF5;">reflect</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">DeepEqual</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected repository: got </span><span style="color: #C0CAF5;">%+v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%+v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> repo</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">repo</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">				t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected error: got </span><span style="color: #C0CAF5;">%v</span><span style="color: #9ECE6A;">, want </span><span style="color: #C0CAF5;">%v</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> expected</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		if</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">			t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">	})</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">	t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Run</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">no repositories</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">t</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">testing</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">T</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		client</span><span style="color: #89DDFF;"> := &amp;</span><span style="color: #C0CAF5;">repositoryListerMock</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			t</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> t</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">			calls</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;"> []</span><span style="color: #C0CAF5;">callListByUser</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					expectPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 1</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					repos</span><span style="color: #89DDFF;">:</span><span style="color: #9ABDF5;">      []</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Repository</span><span style="color: #9ABDF5;">{}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">					resp</span><span style="color: #89DDFF;">:       &amp;</span><span style="color: #C0CAF5;">github</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Response</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">NextPage</span><span style="color: #89DDFF;">:</span><span style="color: #FF9E64;"> 0</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">				}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">			}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		next</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> stop</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> iter</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Pull2</span><span style="color: #9ABDF5;">(</span><span style="color: #7AA2F7;">IterateRepositoriesByUser</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> client</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">thiht</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;">))</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Cleanup</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">stop</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		if</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> next</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">			t</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Fatal</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">unexpected iteration</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">		}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">	})</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+</div>
+
+<script
+  src="https://giscus.app/client.js"
+  data-repo="thiht/thiht.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnk0NzI5MDY0MA=="
+  data-category="Comments"
+  data-category-id="DIC_kwDOAtGZEM4CmJ2J"
+  data-mapping="og:title"
+  data-strict="1"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-input-position="top"
+  data-theme="noborder_light"
+  data-lang="en"
+  crossorigin="anonymous"
+  async
+></script>
+</div>
+
+    <footer class="text-center px-2 py-5">
+      <p>&copy; 2026 Thibaut Rousseau</p>
+      <p>
+        <a href="/atom.xml" title="Subscribe to my feed">
+          <img src="/icons/rss-color.svg" alt="RSS" class="inline-block" width="24" height="24" />
+        </a>
+        <a href="https://github.com/Thiht" title="Follow me on GitHub">
+          <img src="/icons/github-color.svg" alt="GitHub" class="inline-block" width="24" height="24" />
+        </a>
+        <a rel="me" href="https://mastodon.social/@thiht" title="Follow me on Mastodon">
+          <img src="/icons/mastodon-color.svg" alt="Mastodon" class="inline-block" width="24" height="24" />
+        <a
+          href="bitcoin:bc1qawxn5u2rqupvp043rwamn67d383ggd2tc2tfr3?amount=0.000015"
+          title="Donate some Bitcoin"
+        >
+          <img src="/icons/bitcoin-color.svg" alt="Bitcoin" class="inline-block" width="24" height="24" />
+        </a>
+      </p>
+    </footer>
+  </body>
+</html>

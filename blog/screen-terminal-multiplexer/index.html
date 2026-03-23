@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Learn to use screen, a terminal multiplexer | Thibaut Rousseau&#x27;s Blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles/styles.css" />
+    <link rel="stylesheet" href="https://blog.thibaut-rousseau.com/styles/styles.css?h=4bec1dc67e544972762b" />
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml" />
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Thibaut Rousseau&#x27;s Blog" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="e9d5dca2-2e51-4c77-83d3-b88122f7a1d9"></script>
+    <meta name="fediverse:creator" content="@thiht@mastodon.social" />
+    
+<meta property="og:site_name" content="Thibaut Rousseau&#x27;s Blog" />
+<meta property="og:title" content="Learn to use screen, a terminal multiplexer" />
+<meta property="og:url" content="https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;screen-terminal-multiplexer&#x2F;" />
+<meta property="og:description" content="screen is a terminal multiplexer. In this article, you&#x27;ll learn what a terminal multiplexer is, and why it&#x27;s so great." />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="https://blog.thibaut-rousseau.com/images/og-image.png" />
+
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+      mermaid.initialize({
+        theme: 'neutral',
+      })
+    </script>
+  </head>
+
+  <body class="bg-stone-50">
+    <nav class="text-center px-2 py-5">
+      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">Thibaut Rousseau&#x27;s Blog</a></h1>
+    </nav>
+
+    <div class="px-5">
+<div class="prose mx-auto py-10">
+  <h1 class="text-center text-balance">Learn to use screen, a terminal multiplexer</h1>
+
+  <aside class="text-center text-sm text-gray-500">
+    <span class="text-sm">
+      <time datetime="2015-12-04">
+        Dec 04, 2015
+      </time>
+    </span>
+    ·
+    <span class="text-sm"> 13 minutes </span>
+    <br />
+    
+    <span>#shell</span>
+    
+  </aside>
+
+  <p><a rel="external" href="https://www.gnu.org/software/screen/">screen</a>, or GNU screen, is a terminal multiplexer. It allows to manage multiple terminal sessions within the same console. In a way, it does the same thing as modern terminal emulators such as <a rel="external" href="https://gnometerminator.blogspot.com/">Terminator</a> or <a rel="external" href="https://www.enlightenment.org/about-terminology">Terminology</a> with their built-in tab system and layout management. The main benefit is that screen also works through an SSH connection: you will be able to use your screen knowledge and configuration on any machine supporting screen in the world!</p>
+<p>screen has been around for almost 30 years so it's pretty stable now. It is released under the GPL license.</p>
+<p>The main issue I had when starting with screen was its relative difficulty when compared to simple terminal emulators. So <strong>I will make a tour of the most useful keyboard shortcuts for a practical use</strong>, and share with you my screen config. You can also jump directly to the <a href="https://blog.thibaut-rousseau.com/blog/screen-terminal-multiplexer/#cheatsheet-of-the-main-commands">cheatsheet</a> if you want.</p>
+<h2 id="basic-usage">Basic usage</h2>
+<p>screen is not installed by default, so you need to install it first using your package manager.</p>
+<p>To <strong>start screen</strong>, open a terminal and run the command <code>screen</code>. Not that hard, is it?</p>
+<p>We're ready to start learning screen. Don't worry, that's only a few commands!</p>
+<h3 id="window-management">Window management</h3>
+<p>Now you have opened screen, the first thing you need to know is how to <strong>create a new "window"</strong> (i.e. a new virtual terminal). To do so, press the keys <code>Ctrl+a</code>, and then press <code>c</code>. The screen shortcuts all consist of <code>Ctrl+a</code> (called "escape key" or "prefix") followed by another key. You now have two windows opened running in parallel, you can have vim in the first one, and a bash in the second one for example, and that's what screen is all about.</p>
+<p>You can <strong>visualize all the opened windows</strong> with <code>Ctrl+a</code> <code>"</code>. This view allows you to navigate through your windows with the arrow keys, the 0-9 numbers and the enter key. This command is great because it gives you a global overview of your current session, I used it a lot at first.</p>
+<p>But there are more ways to <strong>navigate through the windows</strong>! I personally use almost exclusively the commands <code>Ctrl+a</code> <code>p</code> (<strong>p</strong>revious window) and  <code>Ctrl + a</code> <code>n</code> (<strong>n</strong>ext window). These shortcuts require to have your windows in mind though, but it comes with practice. And don't forget <code>Ctrl+a</code> <code>"</code> is here to rescue you in case of doubt. ;)</p>
+<p>It's also possible to jump to another window with the command <code>Ctrl+a</code> <em><code>number</code></em>, where <em>number</em> is a number between 0 and 9. This matches the "Num" column of the <code>Ctrl+a</code> <code>"</code> view.</p>
+<p>Finally, you can <strong>kill a window</strong> when you have no use for it anymore. To do so, just press <code>Ctrl+d</code> in the shell. There's also a screen command with the "same" effect but it's usually better to proceed this way. Note if you kill all the windows of a session, the session terminates.</p>
+<hr />
+<p>Summary:</p>
+<ul>
+<li><code>Ctrl+a</code> <code>c</code> to create a new window</li>
+<li><code>Ctrl+a</code> <code>"</code> to visualize the opened windows</li>
+<li><code>Ctrl+a</code> <code>p</code> and <code>Ctrl+a</code> <code>n</code> to switch with the previous/next window</li>
+<li><code>Ctrl+a</code> <em><code>number</code></em> to switch to the window <em>number</em></li>
+<li><code>Ctrl+d</code> to kill a window</li>
+</ul>
+<h3 id="session-management">Session management</h3>
+<p>Now you can manage your windows, it is time you learn how to manage your screen sessions.</p>
+<p>You just learned you can terminate a session by killing all its windows, that's a good start. We will now see how to <strong>exit a session without killing it</strong>. It means you'll be able to manage multiple persistent sessions in parallel. This is called "detaching" a session. To be clear, a <strong>detached session</strong> is a session which is still active in background, but on which no one is connected. An <strong>attached session</strong> is a session which is active and currently used.</p>
+<p>The first thing I'll ask you to do is to kill your current screen session if you haven't done it already. You can then <strong>list all your screen sessions</strong> by running the command <code>screen -ls</code>. If all your sessions are closed, it should print something like:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>No Sockets found in /var/run/screen/S-thiht.</span></span></code></pre>
+<p>Now, we'll start a <strong>new session</strong>, but <strong>we'll give it a name</strong> so that we can come back to it more easily later. Run the command <code>screen -S my_session</code>. If you run the command <code>screen -ls</code>, you should obtain something like:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>There is a screen on:</span></span>
+<span class="giallo-l"><span>    10321.my_session        (Attached)</span></span>
+<span class="giallo-l"><span>1 Socket in /var/run/screen/S-thiht.</span></span></code></pre>
+<p>Since you're connected to the session, it's presented as <strong>attached</strong>.</p>
+<p>Now you're connected to a session named "my_session", you can <strong>detach it from the current terminal</strong> with the command <code>Ctrl+a</code> <code>d</code>. This should result in a message like:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>[detached from 10321.my_session]</span></span></code></pre>
+<p>As usual, you can list the currently running sessions with <code>screen -ls</code>. This time, "my_session" should be listed as <strong>detached</strong>:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>There is a screen on:</span></span>
+<span class="giallo-l"><span>    10321.my_session        (Detached)</span></span>
+<span class="giallo-l"><span>1 Socket in /var/run/screen/S-thiht.</span></span></code></pre>
+<p>I suggest you start and detach a few screen sessions to understand how it works. <strong>Be careful not to use the same session name twice</strong>, screen allows it but it can be more painful to resume a session if there are name conflicts.</p>
+<p>With multiple screen sessions, the <code>screen -ls</code> gives something like:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>There are screens on:</span></span>
+<span class="giallo-l"><span>    10474.downloads (Detached)</span></span>
+<span class="giallo-l"><span>    10427.work      (Detached)</span></span>
+<span class="giallo-l"><span>    10321.my_session        (Detached)</span></span>
+<span class="giallo-l"><span>3 Sockets in /var/run/screen/S-thiht.</span></span></code></pre>
+<p>If there aren't any conflicts, you can <strong>resume a session</strong> simply with the command <code>screen -x session_name</code>. So for example if you run <code>screen -x my_session</code>, your session "my_session" will be resumed with the windows you opened before! And if you run <code>screen -ls</code>, it should appear as <strong>attached</strong>:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>There are screens on:</span></span>
+<span class="giallo-l"><span>    10474.downloads (Detached)</span></span>
+<span class="giallo-l"><span>    10427.work      (Detached)</span></span>
+<span class="giallo-l"><span>    10321.my_session        (Attached)</span></span>
+<span class="giallo-l"><span>3 Sockets in /var/run/screen/S-thiht.</span></span></code></pre>
+<p>A last useful thing you should know is how to <strong>kill a detached session without connecting to it</strong>. To do so, the command to run is a bit tricky: <code>screen -S session_name -X quit</code>. This means you pass the command "quit" to the session named "session_name". It's a bit hard to remember so I generally simply resume my session and kill all its windows one by one.</p>
+<hr />
+<p>Summary:</p>
+<ul>
+<li><code>screen -ls</code> to list the sessions and their status</li>
+<li><code>screen -S session_name</code> to start a session with a given name. The name
+should be unique</li>
+<li><code>Ctrl+a</code> <code>d</code> to detach a session</li>
+<li><code>screen -x session_name</code> to resume (reattach) a session knowing its name</li>
+<li><code>screen -S session_name -X quit</code> to terminate a detached session</li>
+</ul>
+<h2 id="advanced-usage">Advanced usage</h2>
+<p>The hardest part is over! You have discovered screen and you know how to use it. All you need now is practice.</p>
+<p>In this section, I'll present a few interesting features of screen, but they're definitely not necessary to use it, so feel free to come back and read this part later.</p>
+<h3 id="layout-management">Layout management</h3>
+<p>In the introduction, I talked about how Terminator and Terminology can work as layout managers. The good news is screen also permits to do that. So to <strong>split horizontally</strong>, you can use the command <code>Ctrl+a</code> <code>S</code>, and to <strong>split vertically</strong> you can use <code>Ctrl+a</code> <code>|</code>.</p>
+<p>To <strong>switch to the next region</strong> (this is how the split panes are called), the command to use is <code>Ctrl+a</code> <code>&lt;Tab&gt;</code>. Each region behaves normally: you can run any command you have learned so far.</p>
+<p>To <strong>close the current region</strong>, use <code>Ctrl+a</code> <code>X</code>. If you work with a lot of panes, you can <strong>close them all but the current one</strong> with <code>Ctrl+a</code> <code>Q</code>.</p>
+<hr />
+<p>Summary:</p>
+<ul>
+<li><code>Ctrl+a</code> <code>S</code> to split horizontally</li>
+<li><code>Ctrl+a</code> <code>|</code> to split vertically</li>
+<li><code>Ctrl+a</code> <code>&lt;Tab&gt;</code> to switch to the next region</li>
+<li><code>Ctrl+a</code> <code>X</code> to close the current region</li>
+<li><code>Ctrl+a</code> <code>Q</code> to close all the regions but the current one</li>
+</ul>
+<h3 id="work-with-the-buffer">Work with the buffer</h3>
+<p>To follow, I'll talk about an important feature of screen: the copy mode, or scrollback mode.</p>
+<p>To <strong>enter the copy mode</strong>, the command is either <code>Ctrl+a</code> <code>&lt;Esc&gt;</code> or <code>Ctrl+a</code> <code>[</code>, choose your side. The copy mode allows you to <strong>navigate through the console buffer without using your mouse</strong>. Since you can't use your wheel to scroll by default, this is the normal way to go back in the results. This mode lets you use some vim commands for the movements (arrow keys, <code>0</code>, <code>$</code>, <code>g</code>, <code>G</code>, etc.).</p>
+<p>You can <strong>copy some text</strong> (that's what the mode is for!) by marking the beginning and the end of a section with the space bar. You can then <strong>paste it</strong> with <code>Ctrl+a</code> <code>]</code>.  For more informations, check the <code>man screen</code> and look for "copy".</p>
+<hr />
+<p>Summary:</p>
+<ul>
+<li><code>Ctrl+a</code> <code>&lt;Esc&gt;</code> or <code>Ctrl+a</code> <code>[</code> to enter in copy mode</li>
+<li><code>&lt;Space&gt;</code> to select and copy some text in copy mode</li>
+<li><code>Ctrl+a</code> <code>]</code> to paste the content of the buffer</li>
+</ul>
+<h3 id="session-sharing">Session sharing</h3>
+<p>I'll finish with a last screen feature I want you to know about: it allows to share a session between multiple users. When working on a remote server, this comes really handy.</p>
+<p>So first, you have to start a session as usual. Then, we'll use the command mode of screen to enable the multiuser mode and give the access right to some users. To <strong>enter the command mode</strong>, type <code>Ctrl+a</code> <code>:</code>. You can then <strong>enable the multiuser mode</strong> with the command <strong>multiuser on</strong>.</p>
+<p>Then to <strong>add a specific user to the session</strong>, enter the command mode again with <code>Ctrl+a</code> <code>:</code> and type the command <strong>acladd <em>username</em></strong> (ACL stands for "Access Control List") with the name of the user you want to add instead of <em>username</em>.</p>
+<p>The user <em>username</em> is now able to <strong>join your session</strong> simply with the command <code>screen -x your_username/session_name</code>. The session is completely shared, which means you can see what the other users do in real time and so can they.</p>
+<p>When a session is shared with multiple users, it can be nice to <strong>know who is currently connected on it</strong>. You can have this info and more thanks to the command <code>Ctrl+a</code> <code>*</code>. The view shows a few useful informations, namely the window a user is currently using, or their permissions.</p>
+<p>Finally, you can <strong>revoke the access rights of user</strong> with the command <strong>acldel <em>username</em></strong> in command mode. There's more you can do to manage a shared session, but I won't go into details, the man page covers everything. Now you have a basic understanding of screen, it should be easier to understand.</p>
+<hr />
+<p>Summary:</p>
+<ul>
+<li><code>Ctrl+a</code> <code>:</code> to switch to command mode
+<ul>
+<li>"multiuser on" to enable the multiuser mode</li>
+<li>"acladd <em>username</em>" to give the access rights to the user <em>username</em></li>
+<li>"acldel <em>username</em>" to remove the access rights to the user <em>username</em></li>
+</ul>
+</li>
+<li><code>screen -x owner/session_name</code> to join a session started by another user</li>
+<li><code>Ctrl+a</code> <code>*</code> to list the other connections to a session</li>
+</ul>
+<h2 id="practical-tips">Practical tips</h2>
+<h3 id="automatically-list-the-screen-sessions">Automatically list the screen sessions</h3>
+<p>When I start my terminal, I like it to list the current screen sessions. To do so, I simply added the <code>screen -ls</code> command to my .bashrc. So now whenever I open a terminal, I'm welcomed with my screen status:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>There are screens on:</span></span>
+<span class="giallo-l"><span>    2927.my_screen3 (Attached)</span></span>
+<span class="giallo-l"><span>    2882.my_screen2 (Attached)</span></span>
+<span class="giallo-l"><span>    2840.my_screen1 (Detached)</span></span>
+<span class="giallo-l"><span>3 Sockets in /var/run/screen/S-thiht.</span></span></code></pre>
+<p>Not only is it really useful to have this status without asking for it, but it is also a good way to think about always using screen.</p>
+<h3 id="good-aliases">Good aliases</h3>
+<p>As you're now aware, screen uses a lot of options. I tried to keep only the most useful in this article but they're still a pain to remember. A good way to remember them is to use aliases. I personally use the following:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span>alias sn=&#39;screen -S&#39;  # sn for screen new</span></span>
+<span class="giallo-l"><span>alias sl=&#39;screen -ls&#39; # sl for screen list</span></span>
+<span class="giallo-l"><span>alias sr=&#39;screen -x&#39;  # sr for screen resume</span></span>
+<span class="giallo-l"><span>function sk() {</span></span>
+<span class="giallo-l"><span>    # sk for screen kill</span></span>
+<span class="giallo-l"><span>    # function instead of alias because the order of the parameters matters</span></span>
+<span class="giallo-l"><span>    screen -S &quot;$1&quot; -X quit</span></span>
+<span class="giallo-l"><span>}</span></span></code></pre>
+<p>These aliases don't conflict with anything standard and they're really easier to remember and to type, so I strongly advise you to use them!</p>
+<h3 id="custom-configuration">Custom configuration</h3>
+<p>screen can be customized in various ways through a .screenrc file, located in your home folder. One of the most useful tricks is the status bar.</p>
+<p><img src="https://blog.thibaut-rousseau.com/blog/screen-terminal-multiplexer/./screen-session-with-status-bar.png" alt="screen session with a status bar" /></p>
+<p>I won't go through the configuration of screen in details (you can read <code>man screen</code> or other articles to learn more), but simply share my commented .screenrc with you:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="plain"><span class="giallo-l"><span># enable the altscreen</span></span>
+<span class="giallo-l"><span># for example in vim, it allows to scroll with the mouse without</span></span>
+<span class="giallo-l"><span># &quot;overflowing&quot; on the terminal</span></span>
+<span class="giallo-l"><span># also it doesn&#39;t &quot;pollute&quot; the terminal when you quit vim</span></span>
+<span class="giallo-l"><span>altscreen on</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span># automatically detach the session if the terminal is closed</span></span>
+<span class="giallo-l"><span>autodetach on</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span># larger command history</span></span>
+<span class="giallo-l"><span>defscrollback 10000</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span># set the encoding of the windows to utf-8</span></span>
+<span class="giallo-l"><span>defutf8 on</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span># disable the startup message</span></span>
+<span class="giallo-l"><span>startup_message off</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span># allow to scroll</span></span>
+<span class="giallo-l"><span>termcapinfo xterm* ti@:te@</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span># disable the annoying visual bell</span></span>
+<span class="giallo-l"><span>vbell off</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span># status bar</span></span>
+<span class="giallo-l"><span># %{= wk}: set the color to white on black</span></span>
+<span class="giallo-l"><span># %S: screen session name</span></span>
+<span class="giallo-l"><span># %-w: previous windows</span></span>
+<span class="giallo-l"><span># %{= kw}: set the color to black on white</span></span>
+<span class="giallo-l"><span># %n: current window number</span></span>
+<span class="giallo-l"><span># %t: current window title</span></span>
+<span class="giallo-l"><span># %{= wk}: set the color to white on black</span></span>
+<span class="giallo-l"><span># %+w: next windows</span></span>
+<span class="giallo-l"><span>caption always &quot;%{= wk}%S: %-w%{= kw}%n %t%{= wk}%+w&quot;</span></span></code></pre>
+<p>Note you can enable any of these options directly from screen's command mode.</p>
+<h3 id="cheatsheet-of-the-main-commands">Cheatsheet of the main commands</h3>
+<h4 id="basic-usage-1">Basic usage</h4>
+<table><thead><tr><th>Command</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>screen</code></td><td>Start a session</td></tr>
+<tr><td><code>screen -ls </code></td><td><strong>L</strong>i<strong>s</strong>t the sessions and their status</td></tr>
+<tr><td><code>screen -S session_name</code></td><td><strong>S</strong>tart a session named "session_name"</td></tr>
+<tr><td><code>screen -x session_name</code></td><td>Resume the session named "session_name"</td></tr>
+<tr><td><code>screen -S session_name -X quit</code></td><td>Terminate the session named "session_name"</td></tr>
+</tbody></table>
+<table><thead><tr><th>Command</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Ctrl+a</code> <code>c</code></td><td><strong>C</strong>reate a new window</td></tr>
+<tr><td><code>Ctrl+a</code> <code>k</code></td><td><strong>K</strong>ill the current window (<a rel="external" href="https://en.wikipedia.org/wiki/End-of-transmission_character"><code>Ctrl+d</code></a> does the same thing)</td></tr>
+<tr><td><code>Ctrl+a</code> <code>"</code></td><td>List the opened windows</td></tr>
+<tr><td><code>Ctrl+a</code> <code>p</code>/<code>n</code></td><td>Go to the <strong>p</strong>revious/<strong>n</strong>ext window</td></tr>
+<tr><td><code>Ctrl+a</code> <code>0</code>-<code>9</code></td><td>Go to the window <em>n</em></td></tr>
+<tr><td><code>Ctrl+a</code> <code>d</code></td><td><strong>D</strong>etach the screen session</td></tr>
+<tr><td><code>Ctrl+a</code> <code>:</code></td><td>Enter the command mode</td></tr>
+</tbody></table>
+<h4 id="split-mode">Split mode</h4>
+<table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
+<tr><td><code>Ctrl+a</code> <code>S</code></td><td><strong>S</strong>plit horizontally</td></tr>
+<tr><td><code>Ctrl+a</code> `</td><td>`</td></tr>
+<tr><td><code>Ctrl+a</code> <code>&lt;Tab&gt;</code></td><td>Go to the next region</td></tr>
+<tr><td><code>Ctrl+a</code> <code>X</code></td><td>Close the current region</td></tr>
+<tr><td><code>Ctrl+a</code> <code>Q</code></td><td>Close all the regions but the current one</td></tr>
+</tbody></table>
+<h4 id="copy-mode">Copy mode</h4>
+<table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
+<tr><td><code>Ctrl+a</code> <code>&lt;Esc&gt;</code>/<code>[</code></td><td>Enter the copy mode</td></tr>
+<tr><td><code>&lt;Space&gt;</code></td><td>Mark a selection</td></tr>
+<tr><td><code>Ctrl+a</code> <code>]</code></td><td>Paste the content of the buffer</td></tr>
+</tbody></table>
+<h4 id="shared-session">Shared session</h4>
+<table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
+<tr><td><code>Ctrl+a</code> <code>:</code> <code>multiuser on</code></td><td>Enable the multiuser mode</td></tr>
+<tr><td><code>Ctrl+a</code> <code>:</code> <code>acladd username</code></td><td>Give the access rights to <em>username</em></td></tr>
+<tr><td><code>Ctrl+a</code> <code>:</code> <code>acldel username</code></td><td>Revoke the access rights to <em>username</em></td></tr>
+<tr><td><code>Ctrl+a</code> <code>*</code></td><td>List the other connections to the session</td></tr>
+<tr><td><code>screen -x owner/session_name</code></td><td>Join a session started by another user</td></tr>
+</tbody></table>
+<h2 id="conclusion">Conclusion</h2>
+<p>screen is a powerful tool if you use the terminal a lot. Yet, it has some drawbacks, that can be pretty annoying. To list a few you <strong>will</strong> be confronted to if you really try to use it:</p>
+<ul>
+<li>bad UTF-8 support. There are a few configurations to make screen work fine with unicode, but it's still a bit messy. I am not even sure there is a proper way to handle UTF-8 characters in the status bar...</li>
+<li>insane status bar configuration. You can see it in the .screenrc I provided, crafting a neat status bar is really hard. It's a shame given how useful they are!</li>
+</ul>
+<p>Good news though, all these issues are allegedly solved with <a rel="external" href="https://tmux.github.io/">tmux</a>, another more recent terminal mutiplexer. I've only used it as a replacement of screen for a few days so I will wait a bit before reviewing it, but it's very similar to screen in its usage, and I'm very satisfied with it so far.</p>
+
+</div>
+
+<script
+  src="https://giscus.app/client.js"
+  data-repo="thiht/thiht.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnk0NzI5MDY0MA=="
+  data-category="Comments"
+  data-category-id="DIC_kwDOAtGZEM4CmJ2J"
+  data-mapping="og:title"
+  data-strict="1"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-input-position="top"
+  data-theme="noborder_light"
+  data-lang="en"
+  crossorigin="anonymous"
+  async
+></script>
+</div>
+
+    <footer class="text-center px-2 py-5">
+      <p>&copy; 2026 Thibaut Rousseau</p>
+      <p>
+        <a href="/atom.xml" title="Subscribe to my feed">
+          <img src="/icons/rss-color.svg" alt="RSS" class="inline-block" width="24" height="24" />
+        </a>
+        <a href="https://github.com/Thiht" title="Follow me on GitHub">
+          <img src="/icons/github-color.svg" alt="GitHub" class="inline-block" width="24" height="24" />
+        </a>
+        <a rel="me" href="https://mastodon.social/@thiht" title="Follow me on Mastodon">
+          <img src="/icons/mastodon-color.svg" alt="Mastodon" class="inline-block" width="24" height="24" />
+        <a
+          href="bitcoin:bc1qawxn5u2rqupvp043rwamn67d383ggd2tc2tfr3?amount=0.000015"
+          title="Donate some Bitcoin"
+        >
+          <img src="/icons/bitcoin-color.svg" alt="Bitcoin" class="inline-block" width="24" height="24" />
+        </a>
+      </p>
+    </footer>
+  </body>
+</html>

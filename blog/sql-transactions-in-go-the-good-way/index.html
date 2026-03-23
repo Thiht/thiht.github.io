@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SQL Transactions in Go: The Good Way | Thibaut Rousseau&#x27;s Blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles/styles.css" />
+    <link rel="stylesheet" href="https://blog.thibaut-rousseau.com/styles/styles.css?h=4bec1dc67e544972762b" />
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml" />
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Thibaut Rousseau&#x27;s Blog" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="e9d5dca2-2e51-4c77-83d3-b88122f7a1d9"></script>
+    <meta name="fediverse:creator" content="@thiht@mastodon.social" />
+    
+<meta property="og:site_name" content="Thibaut Rousseau&#x27;s Blog" />
+<meta property="og:title" content="SQL Transactions in Go: The Good Way" />
+<meta property="og:url" content="https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;sql-transactions-in-go-the-good-way&#x2F;" />
+<meta property="og:description" content="A clean method to write transactions anywhere, without leaking database internals." />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="https://blog.thibaut-rousseau.com/images/og-image.png" />
+
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+      mermaid.initialize({
+        theme: 'neutral',
+      })
+    </script>
+  </head>
+
+  <body class="bg-stone-50">
+    <nav class="text-center px-2 py-5">
+      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">Thibaut Rousseau&#x27;s Blog</a></h1>
+    </nav>
+
+    <div class="px-5">
+<div class="prose mx-auto py-10">
+  <h1 class="text-center text-balance">SQL Transactions in Go: The Good Way</h1>
+
+  <aside class="text-center text-sm text-gray-500">
+    <span class="text-sm">
+      <time datetime="2025-01-21">
+        Jan 21, 2025
+      </time>
+    </span>
+    ·
+    <span class="text-sm"> 8 minutes </span>
+    <br />
+    
+    <span>#go</span>
+    
+  </aside>
+
+  <p>In my last work experience, I designed what I consider a pretty cool and efficient way to manage database transactions across a Go codebase. In a nutshell, I wanted to use database transactions in my business logic without exposing database internals.</p>
+<p>After dogfooding a solution for a while, I extracted it, improved it, and enriched it, to finally release it as the <a rel="external" href="https://github.com/Thiht/transactor">transactor</a> library. This library is now tested across the most common relational databases (PostgreSQL, MySQL, SQLite, MSSQL and Oracle), and is compatible with <a rel="external" href="https://pkg.go.dev/database/sql"><code>database/sql</code></a>, <a rel="external" href="https://pkg.go.dev/github.com/jmoiron/sqlx">jmoiron/sqlx</a> and <a rel="external" href="https://pkg.go.dev/github.com/jackc/pgx/v5">jackc/pgx</a>.</p>
+<p>In my current job, transactors are now our main (soon to be unique!) way to manage database transactions, which is why I feel comfortable talking about this method more widely.</p>
+<p>In this article, I’ll walk you through the design and implementation so you can either use the lib, or adapt it and extend it depending on your needs.</p>
+<h2 id="why-exactly-do-we-need-a-library">Why exactly do we need a library?</h2>
+<p>In web services / APIs, it’s customary to use some kind of layered architecture, like Clean Architecture, Hexagonal Architecture, or anything that boils down to a three-tier architecture. In Go, it’s something like:</p>
+<ol>
+<li><u>Handlers</u> (a.k.a. controllers): the entrypoints of the API, usually the only layer allowed to be aware of the router and current HTTP request/response handlers,</li>
+<li><u>Services</u> (a.k.a. usecases): the business layer, where the domain logic lives,</li>
+<li><u>Stores</u> (a.k.a. repositories, data access, storage, persistence…): the layer communicating with databases, caches, filesystems, and so on. It’s usually the only layer allowed to be aware of the concrete storage systems. In practice, it means it’s the only place where <code>database/sql</code>, your DB driver, or your ORM should be imported.</li>
+</ol>
+<p>Whether transactions should be allowed in the services layer is sometimes up for debate, as they’re somewhat tied to the DB implementation. In Go, a transaction is represented by <code>*sql.Tx</code>, but according to the definitions above, using it directly in the services layer would require importing <code>database/sql</code>. This is why it’s sometimes accepted that transactions should live in the storage layer only.</p>
+<p><strong>I disagree with this.</strong></p>
+<p>I strongly believe transactions can be used both in the storage layer and in the services layer, for different reasons. Specifically, transactions can be a part of the business logic, and are a part of an interface contract. But I also believe neither <code>*sql.DB</code>, <code>*sql.Tx</code> or <code>database/sql</code> should be imported by the services. This is the reason why I needed to create an object that could be injected to the services, allowing them to make transactions safely across many stores, without exposing any implementation details. The solution to this problem is the <a rel="external" href="https://github.com/Thiht/transactor">transactor</a> library.</p>
+<h2 id="the-transactor-interface">The Transactor interface</h2>
+<p>A transactor lets you create a transactional context, represented by a closure. It’s defined as a simple interface:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> Transactor</span><span style="color: #BB9AF7;"> interface</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">  WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>A transactor implements this interface. We can then inject it in a service, and use it to make some transactional calls completely transparently, without knowing anything about the database. Let's look at some sample code.</p>
+<h3 id="example-code-without-a-transaction">Example code without a transaction</h3>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> service</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  balanceStore</span><span style="color: #C0CAF5;"> stores</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Balance</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">s </span><span style="color: #C0CAF5;">service</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> IncreaseBalance</span><span style="color: #9ABDF5;">(</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  account</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  amount</span><span style="color: #BB9AF7;"> int</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  balance</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">balanceStore</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">GetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> account</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  balance</span><span style="color: #89DDFF;"> +=</span><span style="color: #C0CAF5;"> amount</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  err</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">balanceStore</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">SetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> account</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> balance</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #FF9E64;"> nil</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>This way to manage a financial balance is not great for several reasons, but let’s focus on it as a case study. Without going into too much details (“what transactions are used for” is not the topic here).</p>
+<p>This first version, doesn’t use a transaction. It makes it possible to get an inconsistent resulting balance.</p>
+<h3 id="example-code-using-a-transactor">Example code using a transactor</h3>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> service</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  balanceStore</span><span style="color: #C0CAF5;"> stores</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Balance</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  transactor</span><span style="color: #C0CAF5;"> Transactor</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">s </span><span style="color: #C0CAF5;">service</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> IncreaseBalance</span><span style="color: #9ABDF5;">(</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  account</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  amount</span><span style="color: #BB9AF7;"> int</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">transactor</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    balance</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">balanceStore</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">GetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> account</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    balance</span><span style="color: #89DDFF;"> +=</span><span style="color: #C0CAF5;"> amount</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    err</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">balanceStore</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">SetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> account</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> balance</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #FF9E64;"> nil</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  })</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>This second version wraps <code>GetBalance</code> and <code>SetBalance</code> in a transaction, essentially making the operation atomic.</p>
+<p>The changes made when using the Transactor are minimal, as they just impact 2-3 lines in this case, but here’s what happens in details:</p>
+<ol>
+<li><code>WithinTransaction</code> accepts a context and a callback:
+<ol>
+<li>The context will be enriched with the transaction ; more on that later,</li>
+<li>The enriched context is passed to the callback, which I call a <em>transactional context,</em></li>
+<li>To keep the changes minimal, the parent context is shadowed in the callback by naming it <code>ctx</code> ; this has no unintended effects, and makes it impossible to misuse the transactor (eg. by using the wrong context in one of the calls),</li>
+</ol>
+</li>
+<li><code>WithinTransaction</code> does essentially three things to manage the transaction workflow:
+<ol>
+<li>Begin the transaction,</li>
+<li>Execute the callback,</li>
+<li>Commit, or Rollback the transaction.</li>
+</ol>
+</li>
+</ol>
+<p>This workflow is detailed in the flowchart below.</p>
+<pre class="mermaid bg-transparent">
+flowchart TD
+  Start((Start)) --> Begin["Begin transaction"]
+  Begin --> ErrBegin{Error?}
+  ErrBegin -- no --> Callback["Execute callback"]
+  ErrBegin -- yes --> RetErrBegin([Return error])
+  Callback --> ErrCallback{Error?}
+  ErrCallback -- no --> Commit
+  ErrCallback -- yes --> RollbackCallback["Rollback"]
+  RollbackCallback --> RetErrCallback([Return error])
+  Commit --> ErrCommit{Error?}
+  ErrCommit -- no --> Success([Success])
+  ErrCommit -- yes --> RetErrCommit([Return error])
+
+  classDef failure stroke:#eb2f06,fill:#e55039
+  classDef success stroke:#079992,fill:#38ada9
+  class RetErrBegin,RollbackCallback,RetErrCallback,RetErrCommit failure
+  class Success success
+</pre>
+<p>And voilà! The transactor makes <strong>using transactions fool proof, and extremely easy</strong>.</p>
+<p>And the best thing is, there’s more.</p>
+<h2 id="nesting-transactions">Nesting transactions</h2>
+<p>Transactors, when properly implemented, make it possible to deal with <a rel="external" href="https://en.wikipedia.org/wiki/Nested_transaction"><strong>nested transactions</strong></a>. The implementation for nested transactions varies depending on the database, but the transactor library provides an implementation for all the major systems.</p>
+<p>You can use a transactor anywhere, and you don’t have to worry if the methods you call use a transactor themselves. As an example, the following code making use of our previously defined <code>IncreaseBalance</code> is completely valid and working as you would expect:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">s </span><span style="color: #C0CAF5;">service</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> TransferBalance</span><span style="color: #9ABDF5;">(</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  fromAccount</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> toAccount</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #E0AF68;">  amount</span><span style="color: #BB9AF7;"> int</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">transactor</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">DecreaseBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> fromAccount</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> amount</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    err</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">IncreaseBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> toAccount</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> amount</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #FF9E64;"> nil</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  })</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>or, more generally:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">if</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">transactor</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">  // Do some stuff before the nested transaction</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">transactor</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    // Do some stuff inside the nested transaction</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    // Handle rollback of the nested transaction</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">  // Do some stuff after the nested transaction</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>}</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">  // Handle rollback of the main transaction</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>Just like that, we made <strong>transactional methods composable inside a larger transaction</strong>. Compared to other ways of dealing with transactions, such as <a rel="external" href="https://en.wikipedia.org/wiki/Unit_of_work">Unit of Work</a>, transactors make it really straightforward to compose anything inside a transaction: store methods, methods across different stores (working on the same storage system), or business services.</p>
+<h2 id="implementing-a-database-sql-transactor">Implementing a <code>database/sql</code> Transactor</h2>
+<p>To illustrate the above, let’s dive into the implementation of a transactor for <code>database/sql</code> from the Go standard library.</p>
+<p>The full reference implementation can be found in <a rel="external" href="https://github.com/Thiht/transactor/blob/main/stdlib/transactor.go">transactor/stdlib/transactor.go</a>.</p>
+<p>The very basic structure we’ll need will evolve a bit as we go, but let’s get started:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">package</span><span style="color: #C0CAF5;"> transactor</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">import</span><span style="color: #89DDFF;"> (</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">  &quot;</span><span style="color: #C0CAF5;">database/sql</span><span style="color: #89DDFF;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> Transactor</span><span style="color: #BB9AF7;"> interface</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">  WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> transactor</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;">{</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  db</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">sql</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">DB</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">var</span><span style="color: #C0CAF5;"> _ Transactor</span><span style="color: #89DDFF;"> = &amp;</span><span style="color: #C0CAF5;">transactor</span><span style="color: #9ABDF5;">{}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> NewTransactor</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">db</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">sql</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">DB</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">transactor</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #89DDFF;"> &amp;</span><span style="color: #C0CAF5;">transactor</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">db</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> db</span><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">t </span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">transactor</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> txFunc</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #FF9E64;"> nil</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>In this first step, we create a private <code>transactor</code> implementing the <code>Transactor</code> interface.</p>
+<p><code>*sql.DB</code> is a database handler representing an active connection to the database. It’s the result of <a rel="external" href="https://pkg.go.dev/database/sql#Open"><code>sql.Open</code></a>.</p>
+<hr />
+<p>With the general structure in place, we can start implementing the <code>WithinTransaction</code> logic. As we expect it, its role will be to manage the transaction and execute the provided callback within this context.</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">t </span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">transactor</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> txFunc</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  tx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> t</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">db</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">BeginTx</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #C0CAF5;"> fmt</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">failed to begin transaction: </span><span style="color: #C0CAF5;">%w</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  txCtx</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> txToContext</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> tx</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> txFunc</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">txCtx</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">    _</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> tx</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Rollback</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> tx</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Commit</span><span style="color: #9ABDF5;">()</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #C0CAF5;"> fmt</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Errorf</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">failed to commit transaction: </span><span style="color: #C0CAF5;">%w</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> err</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #FF9E64;"> nil</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>This implementation already deals with most of the workflow: the transaction is started with <code>BeginTx</code>, the <code>txFunc</code> callback is then executed, and the transaction is either <code>Commit</code>ted or <code>Rollback</code>ed depending on the callback result.</p>
+<p>The actual magic happens at line 7, with the <code>txToContext</code> function call:</p>
+<ul>
+<li><code>txToContext</code> stores the transaction (an <code>*sql.Tx</code> instance) as a context key,</li>
+<li>the context, enriched with the transaction, is passed to the callback function.</li>
+</ul>
+<p>We can implement <code>txToContext</code> like this:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> txCtxKey</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;">{}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> txToContext</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> tx</span><span style="color: #C0CAF5;"> pgx</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Tx</span><span style="color: #9ABDF5;">)</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">WithValue</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> txCtxKey</span><span style="color: #9ABDF5;">{}</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> tx</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>Using a private struct type as a context key ensures nothing will conflict: this key can only be set by using <code>txCtxKey</code>.</p>
+<hr />
+<p>At this point, the transactor logic is done. The actual <a rel="external" href="https://pkg.go.dev/github.com/Thiht/transactor@v1.1.0/stdlib"><code>transactor/stdlib</code></a> implementation is a bit more complex because it can deal with nested transactions, but the logic is the same.</p>
+<p>The only thing we miss is a way to actually use our transactor. When making our database queries, we must either check if our context contains a transaction, or use the DB connection directly.</p>
+<p>To do so, we need a helper to give us the current transaction or connection from a context: the <code>DBGetter</code>. Let’s modify the <code>NewTransactor</code> constructor to give us a <code>DBGetter</code>:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> DBGetter</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #C0CAF5;"> DB</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> NewTransactor</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">db</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">sql</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">DB</span><span style="color: #9ABDF5;">) (</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">transactor</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> DBGetter</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #89DDFF;"> &amp;</span><span style="color: #C0CAF5;">transactor</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">db</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> db</span><span style="color: #9ABDF5;">}</span><span style="color: #89DDFF;">,</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #C0CAF5;"> DB</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      if</span><span style="color: #C0CAF5;"> tx</span><span style="color: #89DDFF;"> :=</span><span style="color: #7AA2F7;"> txFromContext</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;">;</span><span style="color: #C0CAF5;"> tx</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">        return</span><span style="color: #C0CAF5;"> tx</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">      }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">      return</span><span style="color: #C0CAF5;"> db</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">    }</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p><code>txFromContext</code> does the opposite of our previous <code>txToContext</code> function and is implemented as:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> txFromContext</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #C0CAF5;"> pgx</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Tx</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  tx</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> ok</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> ctx</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Value</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">txCtxKey</span><span style="color: #9ABDF5;">{})</span><span style="color: #89DDFF;">.</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">pgx</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Tx</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> ok</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #C0CAF5;"> tx</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #FF9E64;"> nil</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p><code>DB</code> is simply an interface defining the common methods between <a rel="external" href="https://pkg.go.dev/database/sql#DB"><code>*sql.DB</code></a> and <a rel="external" href="https://pkg.go.dev/database/sql#Tx"><code>*sql.Tx</code></a>, so that we can use a DB handler or a transaction indistinctly:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> DB</span><span style="color: #BB9AF7;"> interface</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">  ExecContext</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> query</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> args</span><span style="color: #89DDFF;"> ...</span><span style="color: #C0CAF5;">any</span><span style="color: #9ABDF5;">) (</span><span style="color: #C0CAF5;">sql</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Result</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">  PrepareContext</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> query</span><span style="color: #BB9AF7;"> string</span><span style="color: #9ABDF5;">) (</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">sql</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Stmt</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">  QueryContext</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> query</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> args</span><span style="color: #89DDFF;"> ...</span><span style="color: #C0CAF5;">any</span><span style="color: #9ABDF5;">) (</span><span style="color: #89DDFF;">*</span><span style="color: #C0CAF5;">sql</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Rows</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #7AA2F7;">  QueryRowContext</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> query</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> args</span><span style="color: #89DDFF;"> ...</span><span style="color: #C0CAF5;">any</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;"> *</span><span style="color: #C0CAF5;">sql</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Row</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<p>The <code>DBGetter</code> we define will always return the initial <code>*sql.DB</code> handler by default, even if the context is completely empty (eg. <code>context.Background()</code> or <code>nil</code>), which makes it safe to use anywhere. The only way it can return a transaction is if it’s called inside a <code>WithinTransaction</code> block, as part of the <code>txFunc</code> callback we defined earlier.</p>
+<hr />
+<p>These changes conclude the transactor implementation. As you’ll see in the examples below, the key for it to work as intended is to <strong>always use the <code>DBGetter</code></strong> to make database queries, never the <code>*sql.DB</code> directly. This is the only way that these functions will know to use an active transaction.</p>
+<p>The following code is an example implementation of the <code>balanceStore</code> described at the beginning of this article, making use of the <code>DBGetter</code>:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="go"><span class="giallo-l"><span style="color: #BB9AF7;">type</span><span style="color: #C0CAF5;"> balanceStore</span><span style="color: #BB9AF7;"> struct</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">	dbGetter</span><span style="color: #C0CAF5;"> DBGetter</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">s </span><span style="color: #C0CAF5;">balanceStore</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> GetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> account</span><span style="color: #BB9AF7;"> string</span><span style="color: #9ABDF5;">) (</span><span style="color: #BB9AF7;">int</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;">) {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  var</span><span style="color: #C0CAF5;"> amount</span><span style="color: #BB9AF7;"> int</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">dbGetter</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">QueryRow</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">SELECT amount FROM balances WHERE id = $1 FOR UPDATE</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> account</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Scan</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&amp;</span><span style="color: #C0CAF5;">amount</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #C0CAF5;"> amount</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #9ABDF5;"> (</span><span style="color: #E0AF68;">s </span><span style="color: #C0CAF5;">balanceStore</span><span style="color: #9ABDF5;">)</span><span style="color: #7AA2F7;"> SetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> account</span><span style="color: #BB9AF7;"> string</span><span style="color: #89DDFF;">,</span><span style="color: #E0AF68;"> balance</span><span style="color: #BB9AF7;"> int</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  _</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">dbGetter</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #9ABDF5;">)</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Exec</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">UPDATE balances SET amount = $1 WHERE id = $2</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> amount</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> account</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">func</span><span style="color: #7AA2F7;"> main</span><span style="color: #9ABDF5;">() {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  ctx</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Background</span><span style="color: #9ABDF5;">()</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  db</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> _</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> sql</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">Open</span><span style="color: #9ABDF5;">(</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ECE6A;">&lt;driver&gt;</span><span style="color: #89DDFF;">&quot;, &quot;</span><span style="color: #9ECE6A;">&lt;dsn&gt;</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  transactor</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> dbGetter</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> transactor</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">NewTransactor</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">db</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  balanceStore</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> balanceStore</span><span style="color: #9ABDF5;">{</span><span style="color: #7DCFFF;">dbGetter</span><span style="color: #89DDFF;">:</span><span style="color: #C0CAF5;"> dbGetter</span><span style="color: #9ABDF5;">}</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">  err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> transactor</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">WithinTransaction</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">,</span><span style="color: #BB9AF7;"> func</span><span style="color: #9ABDF5;">(</span><span style="color: #E0AF68;">ctx</span><span style="color: #C0CAF5;"> context</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">Context</span><span style="color: #9ABDF5;">)</span><span style="color: #BB9AF7;"> error</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		balance</span><span style="color: #89DDFF;">,</span><span style="color: #C0CAF5;"> err</span><span style="color: #89DDFF;"> :=</span><span style="color: #C0CAF5;"> balanceStore</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">GetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">account-1</span><span style="color: #89DDFF;">&quot;</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">		if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">			return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">	  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		balance</span><span style="color: #89DDFF;"> +=</span><span style="color: #FF9E64;"> 10</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">		err</span><span style="color: #89DDFF;"> =</span><span style="color: #C0CAF5;"> s</span><span style="color: #89DDFF;">.</span><span style="color: #C0CAF5;">balanceStore</span><span style="color: #89DDFF;">.</span><span style="color: #7AA2F7;">SetBalance</span><span style="color: #9ABDF5;">(</span><span style="color: #C0CAF5;">ctx</span><span style="color: #89DDFF;">, &quot;</span><span style="color: #9ECE6A;">account-1</span><span style="color: #89DDFF;">&quot;,</span><span style="color: #C0CAF5;"> balance</span><span style="color: #9ABDF5;">)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">	  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">	    return</span><span style="color: #C0CAF5;"> err</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">	  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span><span style="color: #FF9E64;"> nil</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  })</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">  if</span><span style="color: #C0CAF5;"> err</span><span style="color: #BB9AF7;"> !=</span><span style="color: #FF9E64;"> nil</span><span style="color: #9ABDF5;"> {</span></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">    // ❌ Transaction rollbacked</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">    return</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">  }</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #51597D;font-style: italic;">  // ✅ Transaction committed</span></span>
+<span class="giallo-l"><span style="color: #9ABDF5;">}</span></span></code></pre>
+<hr />
+<p>Using the context to pass information is sometimes controversial in the Go community, but in this case I feel the benefits vastly outweigh the cons. In fact, after using transactors for almost a full year in various situations, I'd say there isn't anything that would make me go back to an alternative method for managing transactions.</p>
+<p>Anyway, that’s it for today! I hoped you enjoyed this article, and if you did, I encourage you to give my <a rel="external" href="https://github.com/Thiht/transactor">transactor</a> library a try in one of your projects, and <a rel="external" href="https://github.com/Thiht/transactor/stargazers">maybe ⭐ it on GitHub</a>!</p>
+
+</div>
+
+<script
+  src="https://giscus.app/client.js"
+  data-repo="thiht/thiht.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnk0NzI5MDY0MA=="
+  data-category="Comments"
+  data-category-id="DIC_kwDOAtGZEM4CmJ2J"
+  data-mapping="og:title"
+  data-strict="1"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-input-position="top"
+  data-theme="noborder_light"
+  data-lang="en"
+  crossorigin="anonymous"
+  async
+></script>
+</div>
+
+    <footer class="text-center px-2 py-5">
+      <p>&copy; 2026 Thibaut Rousseau</p>
+      <p>
+        <a href="/atom.xml" title="Subscribe to my feed">
+          <img src="/icons/rss-color.svg" alt="RSS" class="inline-block" width="24" height="24" />
+        </a>
+        <a href="https://github.com/Thiht" title="Follow me on GitHub">
+          <img src="/icons/github-color.svg" alt="GitHub" class="inline-block" width="24" height="24" />
+        </a>
+        <a rel="me" href="https://mastodon.social/@thiht" title="Follow me on Mastodon">
+          <img src="/icons/mastodon-color.svg" alt="Mastodon" class="inline-block" width="24" height="24" />
+        <a
+          href="bitcoin:bc1qawxn5u2rqupvp043rwamn67d383ggd2tc2tfr3?amount=0.000015"
+          title="Donate some Bitcoin"
+        >
+          <img src="/icons/bitcoin-color.svg" alt="Bitcoin" class="inline-block" width="24" height="24" />
+        </a>
+      </p>
+    </footer>
+  </body>
+</html>

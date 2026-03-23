@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The most popular Go dependency is… | Thibaut Rousseau&#x27;s Blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles/styles.css" />
+    <link rel="stylesheet" href="https://blog.thibaut-rousseau.com/styles/styles.css?h=4bec1dc67e544972762b" />
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml" />
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Thibaut Rousseau&#x27;s Blog" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="e9d5dca2-2e51-4c77-83d3-b88122f7a1d9"></script>
+    <meta name="fediverse:creator" content="@thiht@mastodon.social" />
+    
+<meta property="og:site_name" content="Thibaut Rousseau&#x27;s Blog" />
+<meta property="og:title" content="The most popular Go dependency is…" />
+<meta property="og:url" content="https:&#x2F;&#x2F;blog.thibaut-rousseau.com&#x2F;blog&#x2F;the-most-popular-go-dependency-is&#x2F;" />
+<meta property="og:description" content="(I bet it&#x27;s testify)" />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="https://blog.thibaut-rousseau.com/images/og-image.png" />
+
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+      mermaid.initialize({
+        theme: 'neutral',
+      })
+    </script>
+  </head>
+
+  <body class="bg-stone-50">
+    <nav class="text-center px-2 py-5">
+      <h1 class="font-cursive text-2xl"><a href="/" title="Homepage">Thibaut Rousseau&#x27;s Blog</a></h1>
+    </nav>
+
+    <div class="px-5">
+<div class="prose mx-auto py-10">
+  <h1 class="text-center text-balance">The most popular Go dependency is…</h1>
+
+  <aside class="text-center text-sm text-gray-500">
+    <span class="text-sm">
+      <time datetime="2026-01-05">
+        Jan 05, 2026
+      </time>
+    </span>
+    ·
+    <span class="text-sm"> 10 minutes </span>
+    <br />
+    
+    <span>#go</span>
+    
+    <span>#neo4j</span>
+    
+  </aside>
+
+  <p>…</p>
+<p><a rel="external" href="https://github.com/stretchr/testify">testify</a>!</p>
+<p>As you know, destination is not as important as the journey, so now that we got this out of the way, bear with me for the rest of this article, and I’ll give you the top 10, and many more stats 😊 You might even learn a few things along the way!</p>
+<hr />
+<p>Without usage statistics, finding useful and reliable dependencies can be a bit of a challenge. In the Go community, we basically have to rely either:</p>
+<ul>
+<li>on "brand" name reputation: there are some very well known packages (<a rel="external" href="https://github.com/gin-gonic/gin">gin</a>, <a rel="external" href="https://github.com/spf13/cobra">cobra</a>, <a rel="external" href="https://github.com/stretchr/testify">testify</a>…) and organizations (<a rel="external" href="https://github.com/google?q=&amp;type=all&amp;language=go&amp;sort=stargazers">Google</a>, <a rel="external" href="https://github.com/gorilla">gorilla</a>…) that we can trust,</li>
+<li>or on side metrics such as number of GitHub stars, number of open issues, last activity, and more.</li>
+</ul>
+<p>All of this can sometimes help get a feeling of how widely used and trusted a Go module is, but we could get more. What I personally want is knowing how many times a module is actually required as a project dependency to get a feeling of how "battle-tested" a library is. But to do this, I would need to build a graph of the whole (open source) ecosystem, which would be insane… You can see where this is going 😉</p>
+<aside class="my-5 p-5 bg-white shadow-sm rounded-md">
+  The source code for this project is available on <a rel="external" href="https://github.com/Thiht/go-stats">github.com/Thiht/go-stats</a>.
+It uses Go as a primary language (obviously!), and <a rel="external" href="https://neo4j.com">Neo4j</a> as a database.
+</aside>
+<h2 id="mapping-the-go-ecosystem">Mapping the Go ecosystem</h2>
+<p>My <strong>first idea</strong> was to build a list of repositories (a seed) to use as a starting point. The goal was to read the dependencies of these modules from their <code>go.mod</code>, download each of them, <span class="text-sm">read the dependencies of these modules from their <code>go.mod</code>, download each of them, </span><span class="text-2xs">read the dependencies of these modules from their <code>go.mod</code>, download each of…</span> well, you know the deal.</p>
+<p>I implemented this idea on the <a rel="external" href="https://github.com/Thiht/go-stats/tree/v1"><code>v1</code></a> branch of my repository using mainly <a rel="external" href="https://evanli.github.io/Github-Ranking/">Github-Ranking</a> and <a rel="external" href="https://awesome-go.com">awesome-go</a> as sources for building the seed. I ultimately abandoned the idea because of a few shortcomings:</p>
+<ul>
+<li>the sample is largely incomplete,</li>
+<li>cloning so many Git repositories to find their <code>go.mod</code> is reaaally painful and slow,</li>
+<li>and it’s particularly biased towards repositories hosted on GitHub.</li>
+</ul>
+<hr />
+<p>Luckily for me, I came up with a <strong>second idea</strong>: the Go modules ecosystem relies on a centralized public proxy, so surely they expose some information on these modules. And they in fact do so! The proxy APIs are documented on <a rel="external" href="https://proxy.golang.org/">proxy.golang.org</a>:</p>
+<ul>
+<li><a rel="external" href="https://go.dev/ref/mod#goproxy-protocol">proxy.golang.org</a> exposes metadata on each module (versions, latest, mod file…),</li>
+<li><a rel="external" href="http://index.golang.org">index.golang.org</a> exposes a feed of all the published module versions since the introduction of the Go proxy (<code>2019-04-10T19:08:52.997264Z</code>, if you want to make sure not to forget its birthday).</li>
+</ul>
+<p>I used this information to locally download the whole index (module names and versions) since 2019. The downloaded data is available in <a rel="external" href="https://github.com/Thiht/go-stats/tree/main/data/goproxy-modules">goproxy-modules</a>. This can be used as a local immutable cache.</p>
+<aside class="my-5 p-5 bg-white shadow-sm rounded-md">
+  For the full implementation details, see:</p>
+<ul>
+<li><a rel="external" href="https://github.com/Thiht/go-stats/blob/main/cmd/list-goproxy-modules.go"><code>list-goproxy-modules.go</code></a></li>
+<li><a rel="external" href="https://github.com/Thiht/go-stats/blob/main/goproxy/goproxy.go"><code>goproxy.go</code></a></li>
+</ul>
+
+</aside>
+<p>With all this data available locally, the seed is now pretty much exhaustive, and more suitable for data analysis. The processing now simply consists of iterating over every single module, downloading their <code>go.mod</code> file and listing their dependencies. The resulting graph can then trivially be inserted in a specialized graph database like Neo4j.</p>
+<h2 id="deep-diving">Deep diving</h2>
+<img class="float-right w-30" src="./neo4j.png" alt="Neo4j logo" />
+<p>Neo4j is a graph oriented database. It means that unlike relational databases, it works on... graphs. The primary way to store data in Neo4j is using nodes and relationships. This specialized data structure makes it extremely simple to model, and more importantly query huge graphs.</p>
+<aside class="my-5 p-5 bg-white shadow-sm rounded-md">
+  If you want to experiment with Neo4j, I would recommend using the go-stats <a rel="external" href="https://github.com/Thiht/go-stats/blob/main/docker-compose.yml"><code>docker-compose.yml</code></a> file. You can then open <a rel="external" href="http://localhost:7474/browser/">localhost:7474</a> (no credentials needed) to use the Neo4j browser.
+</aside>
+<p>Neo4j, like many NoSQL databases, is schemaless, meaning you don't need to define a schema before creating data. That doesn't mean we don't need a schema, so let's see what we need!</p>
+<pre class="mermaid bg-transparent mx-auto w-50">
+erDiagram
+    Module {
+        string name
+        string version
+    }
+
+    Module ||--o{ Module : DEPENDS_ON
+</pre>
+<p>A Go module is basically identified by its name (eg. <code>github.com/stretchr/testify</code> or <code>go.yaml.in/yaml/v4</code>) and its version. Each module can depend on other modules. We can add more properties to our nodes later on as needed.</p>
+<h3 id="creating-nodes">Creating nodes</h3>
+<p>Neo4j uses <a rel="external" href="https://neo4j.com/docs/cypher-manual/current/introduction/">Cypher</a> as a query language. Inserting data with Cypher can be done with the <a rel="external" href="https://neo4j.com/docs/cypher-manual/current/clauses/create/"><code>CREATE</code></a> clause, but in go-stats I've decided to use the <a rel="external" href="https://neo4j.com/docs/cypher-manual/current/clauses/merge/"><code>MERGE</code></a> clause instead because it behaves as an upsert, letting you update or do nothing in case a node already exists.</p>
+<p>The basic Cypher query to upsert a module node is:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">MERGE</span><span> (</span><span style="color: #C0CAF5;">m</span><span>:</span><span style="color: #C0CAF5;">Module</span><span style="color: #BB9AF7;"> {</span><span style="color: #C0CAF5;"> name</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">name</span><span style="color: #BB9AF7;">,</span><span style="color: #C0CAF5;"> version</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">version</span><span style="color: #BB9AF7;"> }</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">RETURN</span><span style="color: #C0CAF5;"> m</span></span></code></pre>
+<p><code>:Module</code> is a label attached to the node. You can think of it as the type of the node. <code>name</code> and <code>version</code> are properties of the node, they're the data belonging to each specific node.</p>
+<p>To make sure we can't create multiple nodes with the same name-version pair, a unicity constraint is needed:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">CREATE</span><span style="color: #C0CAF5;"> CONSTRAINT module_identity IF NOT EXISTS</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">FOR</span><span> (</span><span style="color: #C0CAF5;">m</span><span>:</span><span style="color: #C0CAF5;">Module</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">REQUIRE</span><span> (</span><span style="color: #C0CAF5;">m</span><span>.</span><span style="color: #C0CAF5;">name</span><span>, </span><span style="color: #C0CAF5;">m</span><span>.</span><span style="color: #C0CAF5;">version</span><span>) </span><span style="color: #BB9AF7;">IS</span><span style="color: #C0CAF5;"> UNIQUE</span></span></code></pre>
+<p>Thanks to this constraint, if <code>MERGE</code> is called a second time with the same <code>name</code> and <code>version</code> properties, it won't do anything.</p>
+<h3 id="creating-relationships">Creating relationships</h3>
+<p>We can then create the dependency relationships between our module nodes:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependency</span><span>:</span><span style="color: #C0CAF5;">Module</span><span style="color: #BB9AF7;"> {</span><span style="color: #C0CAF5;"> name</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependencyName</span><span style="color: #BB9AF7;">,</span><span style="color: #C0CAF5;"> version</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependencyVersion</span><span style="color: #BB9AF7;"> }</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependent</span><span>:</span><span style="color: #C0CAF5;">Module</span><span style="color: #BB9AF7;"> {</span><span style="color: #C0CAF5;"> name</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependentName</span><span style="color: #BB9AF7;">,</span><span style="color: #C0CAF5;"> version</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependentVersion</span><span style="color: #BB9AF7;"> }</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">MERGE</span><span> (</span><span style="color: #C0CAF5;">dependent</span><span>)</span><span style="color: #0DB9D7;">-</span><span style="color: #89DDFF;">[:</span><span style="color: #C0CAF5;">DEPENDS_ON</span><span style="color: #89DDFF;">]</span><span style="color: #0DB9D7;">-&gt;</span><span>(</span><span style="color: #C0CAF5;">dependency</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">RETURN</span><span style="color: #C0CAF5;"> dependency</span><span>, </span><span style="color: #C0CAF5;">dependent</span></span></code></pre>
+<p>This query will:</p>
+<ol>
+<li>find modules that were created earlier using the <a rel="external" href="https://neo4j.com/docs/cypher-manual/current/clauses/match/"><code>MATCH</code></a> clause and assign them to <code>dependency</code> and <code>dependent</code>,</li>
+<li>create the directed relationship between them using the <code>-[:DEPENDS_ON]-&gt;</code> syntax.</li>
+</ol>
+<p>The Go index is naturally sorted chronologically.
+So as long as we iterate over it sequentially, it means that if a module (<em>dependent</em>) depends on another module (<em>dependency</em>), then <em>dependency</em> was necessarily added to the graph before <em>dependent</em>.
+If this condition doesn't hold for some reason (if we were to decide to parallelize the insertions for example), we could simply rewrite the query as:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">MERGE</span><span> (</span><span style="color: #C0CAF5;">dependency</span><span>:</span><span style="color: #C0CAF5;">Module</span><span style="color: #BB9AF7;"> {</span><span style="color: #C0CAF5;"> name</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependencyName</span><span style="color: #BB9AF7;">,</span><span style="color: #C0CAF5;"> version</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependencyVersion</span><span style="color: #BB9AF7;"> }</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">MERGE</span><span> (</span><span style="color: #C0CAF5;">dependent</span><span>:</span><span style="color: #C0CAF5;">Module</span><span style="color: #BB9AF7;"> {</span><span style="color: #C0CAF5;"> name</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependentName</span><span style="color: #BB9AF7;">,</span><span style="color: #C0CAF5;"> version</span><span style="color: #BB9AF7;">:</span><span> $</span><span style="color: #C0CAF5;">dependentVersion</span><span style="color: #BB9AF7;"> }</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">MERGE</span><span> (</span><span style="color: #C0CAF5;">dependent</span><span>)</span><span style="color: #0DB9D7;">-</span><span style="color: #89DDFF;">[:</span><span style="color: #C0CAF5;">DEPENDS_ON</span><span style="color: #89DDFF;">]</span><span style="color: #0DB9D7;">-&gt;</span><span>(</span><span style="color: #C0CAF5;">dependency</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">RETURN</span><span style="color: #C0CAF5;"> dependency</span><span>, </span><span style="color: #C0CAF5;">dependent</span></span></code></pre>
+<p>Using <code>MERGE</code> instead of <code>MATCH</code> would ensure the node gets created if it doesn't exist already.</p>
+<hr />
+<p>These queries are simplified (but close!) variants of what I actually did in go-stats. The main difference is that I enriched the nodes with some additional properties:</p>
+<ul>
+<li>version timestamp,</li>
+<li>latest version,</li>
+<li>semantic version splitting (major, minor, patch, label),</li>
+<li>host, organisation, and more.</li>
+</ul>
+<aside class="my-5 p-5 bg-white shadow-sm rounded-md">
+  For the full implementation details, see: <a rel="external" href="https://github.com/Thiht/go-stats/blob/main/cmd/process-modules.go"><code>process-modules.go</code></a>
+</aside>
+<h2 id="digging-into-the-graph">Digging into the graph</h2>
+<p>After running go-stats for a few days, I ended up with a graph of roughly <strong>40 million nodes</strong>, and <strong>400 million relationships</strong>… that's quite a lot!
+The first thing these numbers tell us is that Go modules have <strong>10 direct dependencies on average</strong>.</p>
+<img class="mx-auto w-100 shadow-md rounded-md" src="./data-analyst.jpg" alt="Meme showing a dog in a scientist outfit saying: I'm a data analyst now">
+<p>For more interesting stats, let's write some Cypher, shall we?</p>
+<h3 id="indexing">Indexing</h3>
+<p>With this volume of data, the absolute first thing to do (that I clearly didn't do at first) is to create relevant indexes. I was initially under the impression that the <code>module_identity</code> constraint previously created would also act as an index for <code>:Module.name</code> since it's a composite unique index. I was wrong, and creating a specific index was necessary:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">CREATE</span><span style="color: #C0CAF5;"> INDEX module_name_idx IF NOT EXISTS</span></span>
+<span class="giallo-l"><span style="color: #C0CAF5;">FOR</span><span> (</span><span style="color: #C0CAF5;">m</span><span>:</span><span style="color: #C0CAF5;">Module</span><span>) </span><span style="color: #C0CAF5;">ON</span><span> (</span><span style="color: #C0CAF5;">m</span><span>.</span><span style="color: #C0CAF5;">name</span><span>)</span></span></code></pre>
+<p>I created other indexes as needed, and to do so the Cypher <a rel="external" href="https://neo4j.com/docs/cypher-manual/current/planning-and-tuning/"><code>PROFILE</code></a> was a tremendous help.</p>
+<h3 id="find-the-direct-dependents-of-a-module">Find the direct dependents of a module</h3>
+<p>As a warm-up, and to learn a bit more about Cypher, let's list the dependents of a specific module:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependency</span><span>:</span><span style="color: #C0CAF5;">Module</span><span style="color: #BB9AF7;"> {</span><span style="color: #C0CAF5;"> name</span><span style="color: #BB9AF7;">:</span><span style="color: #9ECE6A;"> &#39;github.com/pkg/errors&#39;</span><span style="color: #BB9AF7;">,</span><span style="color: #C0CAF5;"> version</span><span style="color: #BB9AF7;">:</span><span style="color: #9ECE6A;"> &#39;v0.9.1&#39;</span><span style="color: #BB9AF7;"> }</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependent</span><span>:</span><span style="color: #C0CAF5;">Module</span><span>)</span><span style="color: #0DB9D7;">-</span><span style="color: #89DDFF;">[:</span><span style="color: #C0CAF5;">DEPENDS_ON</span><span style="color: #89DDFF;">]</span><span style="color: #0DB9D7;">-&gt;</span><span>(</span><span style="color: #C0CAF5;">dependency</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">WHERE</span><span style="color: #C0CAF5;"> dependent</span><span>.</span><span style="color: #C0CAF5;">isLatest</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">RETURN</span><span style="color: #C0CAF5;"> dependent</span><span>.</span><span style="color: #C0CAF5;">versionTime</span><span>.</span><span style="color: #C0CAF5;">year</span><span style="color: #BB9AF7;"> AS</span><span style="color: #C0CAF5;"> year</span><span>, </span><span style="color: #0DB9D7;">COUNT</span><span>(</span><span style="color: #C0CAF5;">dependent</span><span>) </span><span style="color: #BB9AF7;">AS</span><span style="color: #C0CAF5;"> nbDependents</span></span></code></pre>
+<p>I chose <a rel="external" href="https://github.com/pkg/errors/tree/v0.9.1"><code>github.com/pkg/errors@v0.9.1</code></a> because it's a module that was deprecated long ago, I find it interesting to know how much it's still used in the wild. Let's break the query down line by line:</p>
+<ol>
+<li>
+<p><code>MATCH (dependency:Module { name: 'xxx', version: 'xxx' })</code></p>
+<ul>
+<li>
+<p>finds the module node (we know it's unique because of the constraint we declared earlier) with the given <code>name</code> and <code>version</code>. This is equivalent to:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependency</span><span>:</span><span style="color: #C0CAF5;">Module</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">WHERE</span><span style="color: #C0CAF5;"> dependency</span><span>.</span><span style="color: #C0CAF5;">name</span><span style="color: #89DDFF;"> =</span><span style="color: #9ECE6A;"> &#39;xxx&#39;</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">AND</span><span style="color: #C0CAF5;"> dependency</span><span>.</span><span style="color: #C0CAF5;">version</span><span style="color: #89DDFF;"> =</span><span style="color: #9ECE6A;"> &#39;xxx&#39;</span></span></code></pre></li>
+</ul>
+</li>
+<li>
+<p><code>MATCH (dependency)&lt;-[:DEPENDS_ON]-(dependent:Module)</code></p>
+<ul>
+<li>finds the module nodes with a direct <code>DEPENDS_ON</code> relationship towards <code>dependency</code>.</li>
+</ul>
+</li>
+<li>
+<p><code>WHERE dependent.isLatest</code></p>
+<ul>
+<li>keeps <code>dependents</code> modules that are in their latest version. This is useful because for any module <code>x</code> depends on <code>github.com/pkg/errors@v0.9.1</code>, we don't want to count all the versions of <code>x</code> that depend on it. The latest is more relevant to us.</li>
+</ul>
+</li>
+<li>
+<p><code>RETURN dependent.versionTime.year AS year, COUNT(dependent) AS nbDependents</code></p>
+<ul>
+<li>
+<p>simply counts the total dependents of <code>github.com/pkg/errors@v0.9.1</code> and group by release year of the dependent. If we wanted to list them, we could write:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">RETURN</span><span style="color: #C0CAF5;"> dependent</span><span>.</span><span style="color: #C0CAF5;">name</span><span style="color: #BB9AF7;"> AS</span><span style="color: #C0CAF5;"> dependentName</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">ORDER BY</span><span style="color: #C0CAF5;"> dependentName</span><span>;</span></span></code></pre></li>
+</ul>
+</li>
+</ol>
+<p><strong>Results:</strong></p>
+<table><thead><tr><th>year</th><th style="text-align: right">nbDependents</th></tr></thead><tbody>
+<tr><td>2019</td><td style="text-align: right">3</td></tr>
+<tr><td>2020</td><td style="text-align: right">6,774</td></tr>
+<tr><td>2021</td><td style="text-align: right">10,680</td></tr>
+<tr><td>2022</td><td style="text-align: right">11,747</td></tr>
+<tr><td>2023</td><td style="text-align: right">8,992</td></tr>
+<tr><td>2024</td><td style="text-align: right">12,220</td></tr>
+<tr><td>2025</td><td style="text-align: right">16,001</td></tr>
+</tbody></table>
+<p>That's a lot of dependents for a dead library!</p>
+<h3 id="find-the-transitive-dependents-of-a-module">Find the transitive dependents of a module</h3>
+<p>Neo4j really shines at graph traversal. Navigating relationships transitively requires virtually no changes:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependency</span><span>:</span><span style="color: #C0CAF5;">Module</span><span style="color: #BB9AF7;"> {</span><span style="color: #C0CAF5;"> name</span><span style="color: #BB9AF7;">:</span><span style="color: #9ECE6A;"> &#39;github.com/pkg/errors&#39;</span><span style="color: #BB9AF7;">,</span><span style="color: #C0CAF5;"> version</span><span style="color: #BB9AF7;">:</span><span style="color: #9ECE6A;"> &#39;v0.9.1&#39;</span><span style="color: #BB9AF7;"> }</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependent</span><span>:</span><span style="color: #C0CAF5;">Module</span><span>)</span><span style="color: #0DB9D7;">-</span><span style="color: #89DDFF;">[:</span><span style="color: #C0CAF5;">DEPENDS_ON</span><span style="color: #0DB9D7;">*1</span><span>..</span><span style="color: #89DDFF;">]</span><span style="color: #0DB9D7;">-&gt;</span><span>(</span><span style="color: #C0CAF5;">dependency</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">WHERE</span><span style="color: #C0CAF5;"> dependent</span><span>.</span><span style="color: #C0CAF5;">isLatest</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">RETURN</span><span style="color: #0DB9D7;"> COUNT</span><span>(</span><span style="color: #C0CAF5;">dependent</span><span>) </span><span style="color: #BB9AF7;">AS</span><span style="color: #C0CAF5;"> nbDependents</span></span></code></pre>
+<p>The only difference with the previous query is <code>*1..</code>, asking Neo4j to follow the <code>DEPENDS_ON</code> relationship transitively. We could also limit it to 2 levels with <code>*1..2</code>.</p>
+<p>I find this interesting, because in the case of the query for direct dependencies, if we used a relational database, the SQL query would be pretty simple:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="sql"><span class="giallo-l"><span style="color: #7DCFFF;">SELECT</span><span style="color: #0DB9D7;"> COUNT</span><span>(</span><span style="color: #89DDFF;">*</span><span>) </span><span style="color: #89DDFF;">AS</span><span> nb_dependents</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">FROM</span><span> dependencies d</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">JOIN</span><span> modules m </span><span style="color: #89DDFF;">ON</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">id</span><span style="color: #BB9AF7;"> =</span><span style="color: #E0AF68;"> d</span><span>.</span><span style="color: #E0AF68;">dependent_id</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">JOIN</span><span> modules dependency </span><span style="color: #89DDFF;">ON</span><span style="color: #E0AF68;"> dependency</span><span>.</span><span style="color: #E0AF68;">id</span><span style="color: #BB9AF7;"> =</span><span style="color: #E0AF68;"> d</span><span>.</span><span style="color: #E0AF68;">dependency_id</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">WHERE</span><span style="color: #E0AF68;"> dependency</span><span>.</span><span style="color: #E0AF68;">name</span><span style="color: #BB9AF7;"> =</span><span style="color: #89DDFF;"> &#39;</span><span style="color: #9ECE6A;">github.com/pkg/errors</span><span style="color: #89DDFF;">&#39;</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  AND</span><span style="color: #E0AF68;"> dependency</span><span>.</span><span style="color: #E0AF68;">version</span><span style="color: #BB9AF7;"> =</span><span style="color: #89DDFF;"> &#39;</span><span style="color: #9ECE6A;">v0.9.1</span><span style="color: #89DDFF;">&#39;</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  AND</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">is_latest</span><span style="color: #BB9AF7;"> =</span><span> true;</span></span></code></pre>
+<p>but what's as simple as <code>*1..</code> in Cypher would make a dramatically more complex SQL query:</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="sql"><span class="giallo-l"><span style="color: #51597D;font-style: italic;">-- Example using a recursive CTE, I&#39;m not sure every SGBDR implements it in the same way</span></span>
+<span class="giallo-l"><span style="color: #89DDFF;">WITH RECURSIVE</span><span> dependents_cte </span><span style="color: #89DDFF;">AS</span><span> (</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  SELECT</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">id</span><span style="color: #89DDFF;"> AS</span><span> dependency_id</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  FROM</span><span> modules m</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  WHERE</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">name</span><span style="color: #BB9AF7;"> =</span><span style="color: #89DDFF;"> &#39;</span><span style="color: #9ECE6A;">github.com/pkg/errors</span><span style="color: #89DDFF;">&#39;</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">    AND</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">version</span><span style="color: #BB9AF7;"> =</span><span style="color: #89DDFF;"> &#39;</span><span style="color: #9ECE6A;">v0.9.1</span><span style="color: #89DDFF;">&#39;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  UNION ALL</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  SELECT</span><span style="color: #E0AF68;"> d</span><span>.</span><span style="color: #E0AF68;">dependent_id</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  FROM</span><span> dependencies d</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  JOIN</span><span> dependents_cte cte </span><span style="color: #89DDFF;">ON</span><span style="color: #E0AF68;"> d</span><span>.</span><span style="color: #E0AF68;">dependency_id</span><span style="color: #BB9AF7;"> =</span><span style="color: #E0AF68;"> cte</span><span>.</span><span style="color: #E0AF68;">dependency_id</span></span>
+<span class="giallo-l"><span>)</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">SELECT</span><span style="color: #0DB9D7;"> COUNT</span><span>(</span><span style="color: #89DDFF;">DISTINCT</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">id</span><span>) </span><span style="color: #89DDFF;">AS</span><span> nb_dependents</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">FROM</span><span> modules m</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">WHERE</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">id</span><span style="color: #89DDFF;"> IN</span><span> (</span><span style="color: #7DCFFF;">SELECT</span><span> dependency_id </span><span style="color: #7DCFFF;">FROM</span><span> dependents_cte)</span></span>
+<span class="giallo-l"><span style="color: #7DCFFF;">  AND</span><span style="color: #E0AF68;"> m</span><span>.</span><span style="color: #E0AF68;">is_latest</span><span style="color: #BB9AF7;"> =</span><span> true;</span></span></code></pre><h3 id="top-10-most-used-dependencies">Top 10 most used dependencies</h3>
+<p>Using the constructs from above, the query is once again pretty similar.</p>
+<pre class="giallo" style="color: #A9B1D6; background-color: #1A1B26;"><code data-lang="cypher"><span class="giallo-l"><span style="color: #BB9AF7;">MATCH</span><span> (</span><span style="color: #C0CAF5;">dependent</span><span>:</span><span style="color: #C0CAF5;">Module</span><span>)</span><span style="color: #0DB9D7;">-</span><span style="color: #89DDFF;">[:</span><span style="color: #C0CAF5;">DEPENDS_ON</span><span style="color: #89DDFF;">]</span><span style="color: #0DB9D7;">-&gt;</span><span>(</span><span style="color: #C0CAF5;">dependency</span><span>:</span><span style="color: #C0CAF5;">Module</span><span>)</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">WHERE</span><span style="color: #C0CAF5;"> dependent</span><span>.</span><span style="color: #C0CAF5;">isLatest</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">RETURN</span><span style="color: #C0CAF5;"> dependency</span><span>.</span><span style="color: #C0CAF5;">name</span><span style="color: #BB9AF7;"> AS</span><span style="color: #C0CAF5;"> dependencyName</span><span>, </span><span style="color: #0DB9D7;">COUNT</span><span>(</span><span style="color: #C0CAF5;">dependent</span><span>) </span><span style="color: #BB9AF7;">AS</span><span style="color: #C0CAF5;"> nbDependents</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">ORDER BY</span><span style="color: #C0CAF5;"> nbDependents</span><span style="color: #89DDFF;"> DESC</span></span>
+<span class="giallo-l"><span style="color: #BB9AF7;">LIMIT</span><span style="color: #FF9E64;"> 10</span><span>;</span></span></code></pre>
+<p><strong>Results:</strong></p>
+<table><thead><tr><th>dependencyName</th><th style="text-align: right">nbDependents</th></tr></thead><tbody>
+<tr><td>github.com/stretchr/testify</td><td style="text-align: right">259,237</td></tr>
+<tr><td>github.com/google/uuid</td><td style="text-align: right">104,877</td></tr>
+<tr><td>golang.org/x/crypto</td><td style="text-align: right">100,633</td></tr>
+<tr><td>google.golang.org/grpc</td><td style="text-align: right">97,228</td></tr>
+<tr><td>github.com/spf13/cobra</td><td style="text-align: right">93,062</td></tr>
+<tr><td>github.com/pkg/errors</td><td style="text-align: right">92,491</td></tr>
+<tr><td>golang.org/x/net</td><td style="text-align: right">76,722</td></tr>
+<tr><td>google.golang.org/protobuf</td><td style="text-align: right">74,971</td></tr>
+<tr><td>github.com/sirupsen/logrus</td><td style="text-align: right">71,730</td></tr>
+<tr><td>github.com/spf13/viper</td><td style="text-align: right">64,174</td></tr>
+</tbody></table>
+<p><code>github.com/stretchr/testify</code> is comfortably ahead of other dependencies as the most used in the open source Go ecosystem.
+Unsurprisingly, <code>github.com/google/uuid</code> is also a staple library used pretty much everywhere.
+The <code>golang.org/x/</code> dependencies also hold a strong place as the extended stdlib, as well as the infamous <code>github.com/pkg/errors</code>.</p>
+<p>To get more insights, you can download the <a href="https://blog.thibaut-rousseau.com/blog/the-most-popular-go-dependency-is/./top100.csv">top 100 as a CSV file</a>.</p>
+<hr />
+<p>If you want to run your own queries, feel free to download my Neo4j dump via BitTorrent:</p>
+<div class="flex items-center bg-white shadow-sm rounded-md py-3">
+  <div class="flex-shrink-0 text-xl px-5">
+    <img src="/icons/bittorrent-color.svg" class="w-4 !m-0" />
+  </div>
+
+  <div class="flex flex-col justify-start">
+    <a href=".&#x2F;go-stats-neo4j-dump-20260105.torrent">go-stats-neo4j-dump-20260105.tar</a>
+    <span class="text-sm">(11.21 GiB)</span>
+  </div>
+</div>
+<p>To load it in a Neo4j instance, please follow these instructions:</p>
+<ul>
+<li>clone <a rel="external" href="https://github.com/Thiht/go-stats"><code>go-stats</code></a>,</li>
+<li>copy the dump file to <code>neo4j/backups/neo4j.dump</code> (the filename is important),</li>
+<li>execute <code>task neo4j:backup:load</code>, this will write the data to <code>neo4j/data</code>,</li>
+<li>run <code>task neo4j:start</code> to start Neo4j.</li>
+</ul>
+<p>You can then open <a rel="external" href="http://localhost:7474/browser/">localhost:7474</a> (no credentials needed) to use the Neo4j browser.</p>
+<p><img src="https://blog.thibaut-rousseau.com/blog/the-most-popular-go-dependency-is/./neo4j-browser.png" alt="Neo4j browser" /></p>
+<h2 id="that-s-all-folks">That's all Folks!</h2>
+<p>I hope you had a good time reading this post, and that you learned a thing or two!</p>
+<p>I'll probably continue playing around with this side-project as I have more ideas to explore. Specifically, I'd like to enrich the graph with more metadata, such as GitHub stars and tags. So stay tuned to the <a rel="external" href="https://github.com/Thiht/go-stats">GitHub project</a> if you want to follow the upcoming developments.</p>
+
+</div>
+
+<script
+  src="https://giscus.app/client.js"
+  data-repo="thiht/thiht.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnk0NzI5MDY0MA=="
+  data-category="Comments"
+  data-category-id="DIC_kwDOAtGZEM4CmJ2J"
+  data-mapping="og:title"
+  data-strict="1"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-input-position="top"
+  data-theme="noborder_light"
+  data-lang="en"
+  crossorigin="anonymous"
+  async
+></script>
+</div>
+
+    <footer class="text-center px-2 py-5">
+      <p>&copy; 2026 Thibaut Rousseau</p>
+      <p>
+        <a href="/atom.xml" title="Subscribe to my feed">
+          <img src="/icons/rss-color.svg" alt="RSS" class="inline-block" width="24" height="24" />
+        </a>
+        <a href="https://github.com/Thiht" title="Follow me on GitHub">
+          <img src="/icons/github-color.svg" alt="GitHub" class="inline-block" width="24" height="24" />
+        </a>
+        <a rel="me" href="https://mastodon.social/@thiht" title="Follow me on Mastodon">
+          <img src="/icons/mastodon-color.svg" alt="Mastodon" class="inline-block" width="24" height="24" />
+        <a
+          href="bitcoin:bc1qawxn5u2rqupvp043rwamn67d383ggd2tc2tfr3?amount=0.000015"
+          title="Donate some Bitcoin"
+        >
+          <img src="/icons/bitcoin-color.svg" alt="Bitcoin" class="inline-block" width="24" height="24" />
+        </a>
+      </p>
+    </footer>
+  </body>
+</html>

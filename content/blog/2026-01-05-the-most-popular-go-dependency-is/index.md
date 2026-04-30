@@ -186,7 +186,6 @@ RETURN dependent.versionTime.year AS year, COUNT(dependent) AS nbDependents
 I chose [`github.com/pkg/errors@v0.9.1`](https://github.com/pkg/errors/tree/v0.9.1) because it's a module that was deprecated long ago, I find it interesting to know how much it's still used in the wild. Let's break the query down line by line:
 
 1. `MATCH (dependency:Module { name: 'xxx', version: 'xxx' })`
-
    - finds the module node (we know it's unique because of the constraint we declared earlier) with the given `name` and `version`. This is equivalent to:
 
      ```cypher
@@ -196,15 +195,12 @@ I chose [`github.com/pkg/errors@v0.9.1`](https://github.com/pkg/errors/tree/v0.9
      ```
 
 2. `MATCH (dependency)<-[:DEPENDS_ON]-(dependent:Module)`
-
    - finds the module nodes with a direct `DEPENDS_ON` relationship towards `dependency`.
 
 3. `WHERE dependent.isLatest`
-
    - keeps `dependents` modules that are in their latest version. This is useful because for any module `x` depends on `github.com/pkg/errors@v0.9.1`, we don't want to count all the versions of `x` that depend on it. The latest is more relevant to us.
 
 4. `RETURN dependent.versionTime.year AS year, COUNT(dependent) AS nbDependents`
-
    - simply counts the total dependents of `github.com/pkg/errors@v0.9.1` and group by release year of the dependent. If we wanted to list them, we could write:
 
      ```cypher
@@ -254,7 +250,7 @@ WHERE dependency.name = 'github.com/pkg/errors'
 but what's as simple as `*1..` in Cypher would make a dramatically more complex SQL query:
 
 ```sql
--- Example using a recursive CTE, I'm not sure every SGBDR implements it in the same way
+-- Example using a recursive CTE, I'm not sure every RDBMS implements it in the same way
 WITH RECURSIVE dependents_cte AS (
   SELECT m.id AS dependency_id
   FROM modules m

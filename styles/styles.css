@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans:
+    "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-cursive: Charm, cursive;
+  --text-2xs: 0.625rem;
 }
 
 @plugin "@tailwindcss/typography";
@@ -36,8 +38,4 @@
 .giscus {
   @apply max-w-3xl;
   @apply mx-auto;
-}
-
-@theme {
-  --text-2xs: 0.625rem;
 }

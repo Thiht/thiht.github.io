@@ -5,6 +5,8 @@ title = "Thibaut Rousseau's Blog"
 author = "Thibaut Rousseau"
 taxonomies = [{ name = "tags", render = false }]
 
+[markdown]
+insert_anchor_links = "heading"
 
 [markdown.highlighting]
 theme = "tokyo-night"

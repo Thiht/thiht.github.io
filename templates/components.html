@@ -1,0 +1,29 @@
+{% component callout(type) %}
+<aside class="my-5 p-5 bg-white shadow-sm rounded-md">
+  {{ body | markdown(inline=true) | safe }}
+</aside>
+{% endcomponent callout %}
+
+{% component youtube(id, autoplay=false) %}
+<div>
+  <iframe
+    class="block m-auto w-full max-w-xl aspect-video border-none"
+    src="https://www.youtube.com/embed/{{ id }}{% if autoplay %}?autoplay=1{% endif %}"
+    allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>
+  </iframe>
+</div>
+{% endcomponent youtube %}
+
+{% component torrent(torrent_link, torrent_title, file_size) %}
+<div class="flex items-center bg-white shadow-sm rounded-md py-3">
+  <div class="shrink-0 text-xl px-5">
+    <img src="/icons/bittorrent-color.svg" class="w-4 m-0!" />
+  </div>
+
+  <div class="flex flex-col justify-start">
+    <a href="{{ torrent_link }}">{{ torrent_title }}</a>
+    <span class="text-sm">({{ file_size }})</span>
+  </div>
+</div>
+{% endcomponent torrent %}

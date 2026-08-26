@@ -22,12 +22,12 @@ Without usage statistics, finding useful and reliable dependencies can be a bit 
 
 All of this can sometimes help get a feeling of how widely used and trusted a Go module is, but we could get more. What I personally want is knowing how many times a module is actually required as a project dependency to get a feeling of how "battle-tested" a library is. But to do this, I would need to build a graph of the whole (open source) ecosystem, which would be insane… You can see where this is going 😉
 
-{% callout(type="info") %}
+{% <callout type="info"> %}
 
 The source code for this project is available on [github.com/Thiht/go-stats](https://github.com/Thiht/go-stats).
 It uses Go as a primary language (obviously!), and [Neo4j](https://neo4j.com) as a database.
 
-{% end %}
+{% </callout> %}
 
 ## Mapping the Go ecosystem
 
@@ -48,14 +48,14 @@ Luckily for me, I came up with a **second idea**: the Go modules ecosystem relie
 
 I used this information to locally download the whole index (module names and versions) since 2019. The downloaded data is available in [goproxy-modules](https://github.com/Thiht/go-stats/tree/main/data/goproxy-modules). This can be used as a local immutable cache.
 
-{% callout(type="info") %}
+{% <callout type="info"> %}
 
 For the full implementation details, see:
 
 - [`list-goproxy-modules.go`](https://github.com/Thiht/go-stats/blob/main/cmd/list-goproxy-modules.go)
 - [`goproxy.go`](https://github.com/Thiht/go-stats/blob/main/goproxy/goproxy.go)
 
-{% end %}
+{% </callout> %}
 
 With all this data available locally, the seed is now pretty much exhaustive, and more suitable for data analysis. The processing now simply consists of iterating over every single module, downloading their `go.mod` file and listing their dependencies. The resulting graph can then trivially be inserted in a specialized graph database like Neo4j.
 
@@ -65,11 +65,11 @@ With all this data available locally, the seed is now pretty much exhaustive, an
 
 Neo4j is a graph oriented database. It means that unlike relational databases, it works on... graphs. The primary way to store data in Neo4j is using nodes and relationships. This specialized data structure makes it extremely simple to model, and more importantly query huge graphs.
 
-{% callout(type="info") %}
+{% <callout type="info"> %}
 
 If you want to experiment with Neo4j, I would recommend using the go-stats [`docker-compose.yml`](https://github.com/Thiht/go-stats/blob/main/docker-compose.yml) file. You can then open [localhost:7474](http://localhost:7474/browser/) (no credentials needed) to use the Neo4j browser.
 
-{% end %}
+{% </callout> %}
 
 Neo4j, like many NoSQL databases, is schemaless, meaning you don't need to define a schema before creating data. That doesn't mean we don't need a schema, so let's see what we need!
 
@@ -146,11 +146,11 @@ These queries are simplified (but close!) variants of what I actually did in go-
 - semantic version splitting (major, minor, patch, label),
 - host, organisation, and more.
 
-{% callout(type="info") %}
+{% <callout type="info"> %}
 
 For the full implementation details, see: [`process-modules.go`](https://github.com/Thiht/go-stats/blob/main/cmd/process-modules.go)
 
-{% end %}
+{% </callout> %}
 
 ## Digging into the graph
 
@@ -306,7 +306,7 @@ To get more insights, you can download the [top 100 as a CSV file](./top100.csv)
 
 If you want to run your own queries, feel free to download my Neo4j dump via BitTorrent:
 
-{{ torrent (torrent_title="go-stats-neo4j-dump-20260105.tar",torrent_link="./go-stats-neo4j-dump-20260105.torrent",file_size="11.21 GiB") }}
+{{ <torrent torrent_title="go-stats-neo4j-dump-20260105.tar" torrent_link="./go-stats-neo4j-dump-20260105.torrent" file_size="11.21 GiB" /> }}
 
 To load it in a Neo4j instance, please follow these instructions:
 

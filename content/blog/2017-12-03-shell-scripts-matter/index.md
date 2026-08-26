@@ -191,7 +191,7 @@ The easiest way to debug a shell script, besides logging, is to run it with `bas
 
 It's also worth knowing that a few debuggers for Bash exist, for example [bashdb](http://bashdb.sourceforge.net/bashdb.html). bashdb works in the same way as gdb, and can be used to add breakpoints, switching to step by step execution, showing the value of variables, etc. You can learn how to use bashdb with the video "[Using BashDB to Debug Your Shell Scripts ](https://www.youtube.com/watch?v=jbOQJDSTksA)":
 
-{{ youtube(id="jbOQJDSTksA") }}
+{{ <youtube id="jbOQJDSTksA" /> }}
 
 ## Document your scripts
 

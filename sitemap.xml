@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://blog.thibaut-rousseau.com/</loc>
+    </url>
+    <url>
+        <loc>https://blog.thibaut-rousseau.com/blog/screen-terminal-multiplexer/</loc>
+        <lastmod>2015-12-04</lastmod>
+    </url>
+    <url>
+        <loc>https://blog.thibaut-rousseau.com/blog/shell-scripts-matter/</loc>
+        <lastmod>2017-12-03</lastmod>
+    </url>
+    <url>
+        <loc>https://blog.thibaut-rousseau.com/blog/sql-transactions-in-go-the-good-way/</loc>
+        <lastmod>2025-01-21</lastmod>
+    </url>
+    <url>
+        <loc>https://blog.thibaut-rousseau.com/blog/tdd-is-a-personal-practice/</loc>
+        <lastmod>2023-12-18</lastmod>
+    </url>
+    <url>
+        <loc>https://blog.thibaut-rousseau.com/blog/the-most-popular-go-dependency-is/</loc>
+        <lastmod>2026-01-05</lastmod>
+    </url>
+    <url>
+        <loc>https://blog.thibaut-rousseau.com/blog/writing-testing-a-paginated-api-iterator/</loc>
+        <lastmod>2024-12-19</lastmod>
+    </url>
+</urlset>
